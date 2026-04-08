@@ -1,104 +1,93 @@
-export type DynProject = {
-  id: string;
-  name: string;
-  company_name: string;
-  company_type: string;
-  branch: 'kolkata' | 'delhi';
-  stage: string;
-  lead_source: string;
-  loan_type?: string;
-  loan_amount?: number;
-  assigned_team: string[];
-  spoc_ids: string[];
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  contact_person?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  description?: string;
-  deadline?: string;
-};
+/**
+ * src/lib/dynamic.ts
+ *
+ * Provides runtime-dynamic data (projects/SPOCs/invites added during session)
+ * that supplements the static mock data. This bridges the gap between
+ * the mock-based frontend and the real Supabase backend until Supabase
+ * is fully configured.
+ */
 
-export type DynSpoc = {
-  id: string;
-  project_id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  designation?: string;
-  password_hash?: string;
-  is_active: boolean;
-  created_at: string;
-};
+import type { Project, ClientSPOC } from './types';
+import { MOCK_PROJECTS, MOCK_SPOCS } from './mock-data';
 
-type InvitePayload = {
-  token: string;
-  project_id: string;
-  expires_at: number;
-  used: boolean;
-};
+// ─── In-memory stores ────────────────────────────────────────────────────────
 
-function lsGet<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) as T : fallback;
-  } catch {
-    return fallback;
+const dynamicSpocs: ClientSPOC[] = [];
+const dynamicProjects: Project[] = [];
+
+// Simple invite store: token → { project_id, expiresAt }
+const inviteStore: Map<string, { project_id: string; expiresAt: number }> = new Map();
+
+// ─── SPOCs ───────────────────────────────────────────────────────────────────
+
+export function getDynamicSpocs(): ClientSPOC[] {
+  return [...MOCK_SPOCS, ...dynamicSpocs];
+}
+
+export function addDynamicSpoc(spoc: ClientSPOC) {
+  const exists = dynamicSpocs.some((s) => s.email === spoc.email);
+  if (!exists) {
+    dynamicSpocs.push(spoc);
   }
 }
 
-function lsSet<T>(key: string, value: T) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+export function clearDynamicSpocs() {
+  dynamicSpocs.length = 0;
 }
 
-export function getDynamicProjects(): DynProject[] {
-  return lsGet<DynProject[]>('dyn_projects', []);
+// ─── Projects ────────────────────────────────────────────────────────────────
+
+export function getDynamicProjects(): Project[] {
+  return dynamicProjects;
 }
 
-export function saveDynamicProject(p: DynProject) {
-  const list = getDynamicProjects();
-  const idx = list.findIndex(x => x.id === p.id);
-  if (idx >= 0) list[idx] = p; else list.push(p);
-  lsSet('dyn_projects', list);
+export function getMergedProjects(): Project[] {
+  return [...MOCK_PROJECTS, ...dynamicProjects];
 }
 
-export function getDynamicSpocs(): DynSpoc[] {
-  return lsGet<DynSpoc[]>('dyn_spocs', []);
+export function saveDynamicProject(project: Project) {
+  const idx = dynamicProjects.findIndex((p) => p.id === project.id);
+  if (idx >= 0) {
+    dynamicProjects[idx] = project;
+  } else {
+    dynamicProjects.push(project);
+  }
 }
 
-export function addDynamicSpoc(s: DynSpoc) {
-  const list = getDynamicSpocs();
-  list.push(s);
-  lsSet('dyn_spocs', list);
+export function getProjectByIdMerged(id: string): Project | undefined {
+  return [...MOCK_PROJECTS, ...dynamicProjects].find((p) => p.id === id);
 }
 
-export function createInviteToken(projectId: string, ttlHours = 48): string {
-  const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2, 6);
-  const invites = lsGet<InvitePayload[]>('dyn_invites', []);
-  invites.push({ token, project_id: projectId, expires_at: Date.now() + ttlHours * 3600_000, used: false });
-  lsSet('dyn_invites', invites);
+// ─── Invite tokens ───────────────────────────────────────────────────────────
+
+/**
+ * Creates a short-lived invite token for a project.
+ * @param project_id - The project ID to associate with this invite.
+ * @param hours - How many hours before the invite expires (default: 72).
+ */
+export function createInviteToken(project_id: string, hours = 72): string {
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const expiresAt = Date.now() + hours * 60 * 60 * 1000;
+  inviteStore.set(token, { project_id, expiresAt });
   return token;
 }
 
-export function readInvite(token: string): InvitePayload | undefined {
-  const invites = lsGet<InvitePayload[]>('dyn_invites', []);
-  return invites.find(i => i.token === token);
-}
-
-export function consumeInvite(token: string) {
-  const invites = lsGet<InvitePayload[]>('dyn_invites', []);
-  const idx = invites.findIndex(i => i.token === token);
-  if (idx >= 0) {
-    invites[idx].used = true;
-    lsSet('dyn_invites', invites);
+/**
+ * Reads an invite by token. Returns null if expired or not found.
+ */
+export function readInvite(token: string): { project_id: string } | null {
+  const entry = inviteStore.get(token);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    inviteStore.delete(token);
+    return null;
   }
+  return { project_id: entry.project_id };
 }
 
-export function getProjectByIdMerged(id: string): DynProject | undefined {
-  return getDynamicProjects().find(p => p.id === id);
+/**
+ * Marks an invite as consumed (deletes it so it can't be reused).
+ */
+export function consumeInvite(token: string) {
+  inviteStore.delete(token);
 }

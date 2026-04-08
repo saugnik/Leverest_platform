@@ -93,6 +93,25 @@ export default function LoginPage() {
     if (!password) { setError('Please enter your password.'); return; }
     setError('');
     setLoading(true);
+
+    // Try the real API first; fall back to mock auth for demo
+    try {
+      const apiMode = mode === 'team' ? 'internal' : 'spoc';
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: apiMode, email, password }),
+      });
+      if (res.ok) {
+        setLoading(false);
+        router.push(mode === 'client' ? '/client' : '/dashboard');
+        return;
+      }
+    } catch {
+      // API unavailable — use mock auth
+    }
+
+    // Mock auth fallback (demo / no Supabase configured)
     const result = await login(email, password);
     setLoading(false);
     if (result.success) {
@@ -258,7 +277,7 @@ export default function LoginPage() {
                 onClick={() => {
                   setMode(opt.key as LoginMode);
                   setSelectedMember(null);
-                  setSelectedClient(null);
+                  setClientEmail('');
                   setPassword('');
                   setError('');
                   setShowDropdown(false);

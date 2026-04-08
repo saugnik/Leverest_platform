@@ -1,13 +1,11 @@
 'use client';
 
 import { use, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { readInvite, consumeInvite, addDynamicSpoc, getProjectByIdMerged } from '@/lib/dynamic';
 
 export default function ClientInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
-  const router = useRouter();
   const invite = useMemo(() => readInvite(token), [token]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -20,7 +18,7 @@ export default function ClientInvitePage({ params }: { params: Promise<{ token: 
 
   const project = invite ? getProjectByIdMerged(invite.project_id) : undefined;
 
-  async function submit() {
+  function submit() {
     setError('');
     if (!name || !email || !password || !confirmPassword) {
       setError('All required fields must be filled.');
@@ -38,12 +36,12 @@ export default function ClientInvitePage({ params }: { params: Promise<{ token: 
     const newSpocId = `spoc-${Date.now()}`;
     addDynamicSpoc({
       id: newSpocId,
-      project_id: invite.project_id,
+      project_id: invite!.project_id,
       name,
       email,
       phone,
       designation,
-      password_hash: password, // In a real app, this would be hashed
+      password_hash: password,
       is_active: true,
       created_at: new Date().toISOString(),
     });
@@ -52,17 +50,35 @@ export default function ClientInvitePage({ params }: { params: Promise<{ token: 
   }
 
   if (!invite || !project) {
+    return (
+      <div style={{ padding: '3rem', maxWidth: '520px', margin: '0 auto' }}>
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>
+            Invalid Invite
+          </div>
+          <div style={{ fontSize: '0.86rem', color: 'var(--text-3)', marginTop: '6px' }}>
+            This invite link is invalid or has expired. Contact your Leverest representative.
+          </div>
+          <Link href="/" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: '14px', textDecoration: 'none' }}>
+            Back to Login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (done) {
     return (
       <div style={{ padding: '3rem', maxWidth: '520px', margin: '0 auto' }}>
         <div className="card" style={{ padding: '20px' }}>
-          <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>You're all set</div>
+          <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>
+            You&apos;re all set
+          </div>
           <div style={{ fontSize: '0.86rem', color: 'var(--text-3)', marginTop: '6px' }}>
             Your access has been configured. Use your email and the password you just set to sign in.
           </div>
-          <Link href="/client/login" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: '14px', textDecoration: 'none' }}>
-            Go to Login →
+          <Link href="/" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: '14px', textDecoration: 'none' }}>
+            Go to Login &rarr;
           </Link>
         </div>
       </div>
@@ -76,7 +92,7 @@ export default function ClientInvitePage({ params }: { params: Promise<{ token: 
           Join Project
         </div>
         <div style={{ fontSize: '0.86rem', color: 'var(--text-3)', marginTop: '6px' }}>
-          {project ? project.company_name : 'New Project'}
+          {project.company_name}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
           <div>
@@ -95,9 +111,26 @@ export default function ClientInvitePage({ params }: { params: Promise<{ token: 
             <label className="field-label">Designation</label>
             <input className="field" value={designation} onChange={e => setDesignation(e.target.value)} />
           </div>
+          <div>
+            <label className="field-label">Password *</label>
+            <input className="field" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Confirm Password *</label>
+            <input className="field" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+          </div>
         </div>
+        {error && (
+          <div style={{
+            marginTop: '12px', padding: '9px 12px',
+            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: '7px', fontSize: '0.78rem', color: '#F87171',
+          }}>
+            {error}
+          </div>
+        )}
         <button onClick={submit} className="btn btn-primary" style={{ marginTop: '16px' }}>
-          Add Member
+          Set Up Account
         </button>
       </div>
     </div>
