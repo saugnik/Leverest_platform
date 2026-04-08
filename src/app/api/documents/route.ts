@@ -30,6 +30,16 @@ export async function GET(request: NextRequest) {
       void user;
     }
 
+    // MOCK DATA FALLBACK
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+      const { MOCK_DOCUMENTS } = await import('@/lib/mock-data');
+      let docs = MOCK_DOCUMENTS;
+      if (authorizedProjectId) {
+        docs = docs.filter(d => d.project_id === authorizedProjectId);
+      }
+      return NextResponse.json({ documents: docs });
+    }
+
     const query = supabase
       .from('documents')
       .select('*')

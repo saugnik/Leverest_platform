@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_QUERIES, MOCK_PROJECTS, getProjectsByUser } from '@/lib/mock-data';
 import { Plus, MessageSquare, CheckCircle2, Clock, AlertCircle, Search } from 'lucide-react';
 
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -17,27 +16,51 @@ function timeAgo(d: string) {
 
 export default function QueriesPage() {
   const { user } = useAuth();
-  const projects = getProjectsByUser(user?.email || '', user?.role || '');
-  const projectIds = projects.map(p => p.id);
-  const allQueries = MOCK_QUERIES.filter(q => projectIds.includes(q.project_id));
 
-  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'in_progress' | 'resolved'>('all');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [allQueries, setAllQueries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'resolved'>('all');
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const [qRes, pRes] = await Promise.all([
+          fetch('/api/queries'),
+          fetch('/api/projects')
+        ]);
+        const qData = await qRes.json();
+        const pData = await pRes.json();
+        setAllQueries(qData.queries || []);
+        setProjects(pData.projects || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
   const filtered = allQueries.filter(q => {
     const matchStatus = filterStatus === 'all' || q.status === filterStatus;
-    const matchType = filterType === 'all' || q.query_type === filterType;
+    const matchType = filterType === 'all' || q.source === filterType;
     const matchSearch = !search || q.title.toLowerCase().includes(search.toLowerCase()) || q.description.toLowerCase().includes(search.toLowerCase());
     return matchStatus && matchType && matchSearch;
   });
 
   const open = allQueries.filter(q => q.status === 'open').length;
-  const inProg = allQueries.filter(q => q.status === 'in_progress').length;
   const resolved = allQueries.filter(q => q.status === 'resolved').length;
 
   function getProject(pid: string) {
-    return MOCK_PROJECTS.find(p => p.id === pid);
+    return projects.find(p => p.id === pid);
+  }
+
+  if (loading) {
+    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading queries...</div>;
   }
 
   return (
@@ -54,11 +77,10 @@ export default function QueriesPage() {
       </div>
 
       {/* KPI row */}
-      <div className="grid-4" style={{ marginBottom: '1.25rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '1.25rem' }}>
         {[
           { label: 'Total', value: allQueries.length, color: 'var(--text-1)', bg: 'rgba(255,255,255,0.04)' },
           { label: 'Open', value: open, color: '#F87171', bg: 'rgba(239,68,68,0.08)' },
-          { label: 'In Progress', value: inProg, color: '#FCD34D', bg: 'rgba(245,158,11,0.08)' },
           { label: 'Resolved', value: resolved, color: '#4ADE80', bg: 'rgba(34,197,94,0.08)' },
         ].map(k => (
           <div key={k.label} className="card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -70,7 +92,7 @@ export default function QueriesPage() {
 
       {/* Status pills */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
-        {([['all','All'], ['open','Open'], ['in_progress','In Progress'], ['resolved','Resolved']] as [string,string][]).map(([val, label]) => (
+        {([['all','All'], ['open','Open'], ['resolved','Resolved']] as [string,string][]).map(([val, label]) => (
           <button key={val} onClick={() => setFilterStatus(val as any)} style={{
             padding: '5px 12px', borderRadius: '99px', border: '1px solid',
             fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
@@ -88,11 +110,9 @@ export default function QueriesPage() {
           <input type="text" placeholder="Search queries…" value={search} onChange={e => setSearch(e.target.value)} className="field" style={{ paddingLeft: '32px' }} />
         </div>
         <select value={filterType} onChange={e => setFilterType(e.target.value)} className="field" style={{ width: 'auto' }}>
-          <option value="all">All Types</option>
-          <option value="document">Document</option>
+          <option value="all">All Sources</option>
           <option value="bank">Bank</option>
           <option value="internal">Internal</option>
-          <option value="compliance">Compliance</option>
         </select>
       </div>
 
@@ -104,7 +124,7 @@ export default function QueriesPage() {
               <tr>
                 <th>Query</th>
                 <th>Project</th>
-                <th>Type</th>
+                <th>Source</th>
                 <th>Priority</th>
                 <th>Status</th>
                 <th>Raised By</th>
@@ -114,7 +134,7 @@ export default function QueriesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(q => {
+              {filtered.map((q: any) => {
                 const proj = getProject(q.project_id);
                 return (
                   <tr key={q.id}>
@@ -125,20 +145,18 @@ export default function QueriesPage() {
                       </div>
                     </td>
                     <td style={{ fontSize: '0.74rem', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
-                      {proj?.company_name || '—'}
+                      {proj?.client_name || '—'}
                     </td>
-                    <td><span className="pill pill-slate">{q.query_type}</span></td>
+                    <td><span className="pill pill-slate" style={{ textTransform: 'capitalize' }}>{q.source}</span></td>
                     <td>
-                      <span className={`pill ${q.priority === 'high' ? 'pill-red' : q.priority === 'medium' ? 'pill-gold' : 'pill-slate'}`}>
-                        {q.priority}
-                      </span>
+                      <span className="pill pill-slate">Normal</span>
                     </td>
                     <td>
-                      <span className={`pill ${q.status === 'resolved' ? 'pill-green' : q.status === 'in_progress' ? 'pill-gold' : 'pill-red'}`}>
-                        {q.status === 'in_progress' ? 'In Progress' : q.status.charAt(0).toUpperCase() + q.status.slice(1)}
+                      <span className={`pill ${q.status === 'resolved' ? 'pill-green' : 'pill-red'}`}>
+                        {q.status.charAt(0).toUpperCase() + q.status.slice(1)}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.73rem' }}>{q.raised_by_name}</td>
+                    <td style={{ fontSize: '0.73rem' }}>{q.raised_by}</td>
                     <td style={{ fontSize: '0.7rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(q.created_at)}</td>
                     <td style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{timeAgo(q.created_at)}</td>
                     <td>

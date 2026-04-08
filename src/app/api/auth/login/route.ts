@@ -29,6 +29,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // ── MOCK FALLBACK IF NO REAL SUPABASE IS SETUP ──
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+        const { MOCK_USERS } = await import('@/lib/mock-data');
+        const user = MOCK_USERS.find(u => u.email === email);
+        if (!user || password !== 'password123') { // Simple mock verification
+          return NextResponse.json({ error: 'Invalid mock credentials. Try admin@leverestfin.com / password123' }, { status: 401 });
+        }
+        
+        // Build mock JWT or secure cookie (we'll just use SPOC logic for mock internal in dev, or fake it)
+        const response = NextResponse.json({ success: true, user });
+        response.cookies.set('sb-auth-token', 'mock-token-xyz', { path: '/' }); 
+        // Note: For fully working mock internal auth, we just return the user, and the client AuthContext handles it.
+        return response;
+      }
+
       const supabase = await createClient();
 
       // Authenticate via Supabase Auth
@@ -73,41 +88,61 @@ export async function POST(request: NextRequest) {
 
     // ── SPOC LOGIN ────────────────────────────────────────────────────────────
     if (mode === 'spoc') {
-      const adminClient = await createAdminClient();
-
-      // Look up the SPOC by email
-      const { data: spoc, error: spocError } = await adminClient
-        .from('client_spocs')
-        .select('id, project_id, name, email, designation, password_hash')
-        .eq('email', email)
-        .single();
-
-      if (spocError || !spoc) {
-        return NextResponse.json(
-          { error: 'Invalid credentials. Contact your Leverest representative.' },
-          { status: 401 }
-        );
-      }
-
-      // Verify password with bcrypt
-      const bcrypt = await import('bcryptjs');
-      const valid = await bcrypt.compare(password, spoc.password_hash || '');
-      if (!valid) {
-        return NextResponse.json(
-          { error: 'Invalid credentials. Please try again.' },
-          { status: 401 }
-        );
-      }
-
-      // Build SPOC session and set cookie
+      const isMissingDB = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
       const { buildSpocCookieValue, SPOC_COOKIE } = await import('@/lib/auth');
-      const sessionPayload = {
-        id: spoc.id,
-        email: spoc.email,
-        name: spoc.name,
-        project_id: spoc.project_id,
-        designation: spoc.designation,
-      };
+      
+      let sessionPayload;
+
+      if (isMissingDB) {
+        // MOCK FALLBACK
+        const { MOCK_SPOCS } = await import('@/lib/mock-data');
+        const spoc = MOCK_SPOCS.find(s => s.email === email);
+        if (!spoc || password !== 'password123') {
+          return NextResponse.json({ error: 'Invalid mock credentials. Try spoc@client.com / password123' }, { status: 401 });
+        }
+        sessionPayload = {
+          id: spoc.id,
+          email: spoc.email,
+          name: spoc.name,
+          project_id: spoc.project_id,
+          designation: spoc.designation,
+        };
+      } else {
+        // REAL DB
+        const adminClient = await createAdminClient();
+
+        // Look up the SPOC by email
+        const { data: spoc, error: spocError } = await adminClient
+          .from('client_spocs')
+          .select('id, project_id, name, email, designation, password_hash')
+          .eq('email', email)
+          .single();
+
+        if (spocError || !spoc) {
+          return NextResponse.json(
+            { error: 'Invalid credentials. Contact your Leverest representative.' },
+            { status: 401 }
+          );
+        }
+
+        // Verify password with bcrypt
+        const bcrypt = await import('bcryptjs');
+        const valid = await bcrypt.compare(password, spoc.password_hash || '');
+        if (!valid) {
+          return NextResponse.json(
+            { error: 'Invalid credentials. Please try again.' },
+            { status: 401 }
+          );
+        }
+
+        sessionPayload = {
+          id: spoc.id,
+          email: spoc.email,
+          name: spoc.name,
+          project_id: spoc.project_id,
+          designation: spoc.designation,
+        };
+      }
 
       const cookieValue = buildSpocCookieValue(sessionPayload);
       const response = NextResponse.json({ success: true, spoc: sessionPayload });

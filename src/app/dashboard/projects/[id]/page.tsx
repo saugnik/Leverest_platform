@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import {
-  MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_BANK_SUGGESTIONS,
-  MOCK_NOTES, MOCK_BANK_COMMS, MOCK_ACTIVITY_LOGS, MOCK_MESSAGES, MOCK_SPOCS,
   getProjectDocCompletionPercent, formatCurrency,
 } from '@/lib/mock-data';
 import { PIPELINE_STAGES } from '@/lib/types';
@@ -15,7 +13,7 @@ import {
   Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock,
 } from 'lucide-react';
 
-type Tab = 'overview' | 'documents' | 'queries' | 'banks' | 'notes' | 'communication' | 'activity' | 'messages';
+type Tab = 'overview' | 'documents' | 'queries' | 'banks' | 'notes' | 'activity';
 
 function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
 function getGrad(name: string) {
@@ -50,24 +48,27 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [newNote, setNewNote] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [messages, setMessages] = useState(MOCK_MESSAGES.filter((m) => m.project_id === id));
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const project = MOCK_PROJECTS.find((p) => p.id === id);
+  useEffect(() => {
+    fetch(`/api/projects/${id}`)
+      .then(res => res.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(console.error);
+  }, [id]);
+
+  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading...</div>;
+
+  const { project, documents: docs = [], queries = [], banks = [], notes = [], activity = [], spocs = [], members = [] } = data || {};
+
   if (!project) return (
     <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
       Project not found. <Link href="/dashboard/projects" style={{ color: 'var(--gold)' }}>← Back</Link>
     </div>
   );
 
-  const docs      = MOCK_DOCUMENTS.filter(d => d.project_id === id);
-  const queries   = MOCK_QUERIES.filter(q => q.project_id === id);
-  const banks     = MOCK_BANK_SUGGESTIONS.filter(b => b.project_id === id);
-  const notes     = MOCK_NOTES.filter(n => n.project_id === id);
-  const bankComms = MOCK_BANK_COMMS.filter(b => b.project_id === id);
-  const activity  = MOCK_ACTIVITY_LOGS.filter(a => a.project_id === id);
-  const spocs     = MOCK_SPOCS.filter(s => project.spoc_ids.includes(s.id));
-  const completion = getProjectDocCompletionPercent(id);
+  const completion = getProjectDocCompletionPercent(project.id);
   const score = project.approval_score || 0;
   const scoreColor = score >= 75 ? '#4ADE80' : score >= 55 ? '#FCD34D' : '#F87171';
 
@@ -78,12 +79,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const TABS: { id: Tab; label: string; icon: React.ElementType; count?: number }[] = [
     { id: 'overview',       label: 'Overview',      icon: TrendingUp },
     { id: 'documents',      label: 'Documents',     icon: FileText,       count: docs.length },
-    { id: 'queries',        label: 'Queries',       icon: MessageSquare,  count: queries.filter(q => q.status !== 'resolved').length },
+    { id: 'queries',        label: 'Queries',       icon: MessageSquare,  count: queries.filter((q: any) => q.status !== 'resolved').length },
     { id: 'banks',          label: 'Banks',         icon: Banknote,       count: banks.length },
     { id: 'notes',          label: 'Internal Notes',icon: StickyNote,     count: notes.length },
-    { id: 'communication',  label: 'Bank Comms',    icon: Phone,          count: bankComms.length },
     { id: 'activity',       label: 'Activity',      icon: Activity,       count: activity.length },
-    { id: 'messages',       label: 'Messages',      icon: MessageCircle,  count: messages.length },
   ];
 
   return (
@@ -101,7 +100,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-1)' }}>
-              {project.company_name}
+              {project.client_name}
             </div>
             <span className={`pill stage-${project.stage}`}>{getStageLabel(project.stage)}</span>
             <span className="pill pill-slate">{project.company_type === 'nbfc' ? 'NBFC' : 'Mfg / Service'}</span>
@@ -260,7 +259,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <table className="tbl">
                     <thead><tr><th>Name</th><th>Email</th></tr></thead>
                     <tbody>
-                      {project.assigned_team.map((email: string) => {
+                      {members.map((m: any) => {
+                        const email = m.user_email;
                         const n = email.split('@')[0].split('.').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
                         return (
                           <tr key={email}>
@@ -293,15 +293,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <div className="progress-track lg"><div className="progress-fill" style={{ width: `${completion}%` }} /></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginTop: '12px', textAlign: 'center' }}>
                   <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '7px', padding: '8px 4px' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#4ADE80' }}>{docs.filter(d => d.status==='received').length}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#4ADE80' }}>{docs.filter((d: any) => d.status==='received').length}</div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>Received</div>
                   </div>
                   <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '7px', padding: '8px 4px' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FCD34D' }}>{docs.filter(d => d.status==='pending').length}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FCD34D' }}>{docs.filter((d: any) => d.status==='pending').length}</div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>Pending</div>
                   </div>
                   <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '7px', padding: '8px 4px' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F87171' }}>{docs.filter(d => d.status==='required').length}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F87171' }}>{docs.filter((d: any) => d.status==='required').length}</div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>Missing</div>
                   </div>
                 </div>
@@ -334,11 +334,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
 
               {/* Commission */}
-              {canSeeCommission && project.commission_amount && (
+              {canSeeCommission && project.commission_percent && (
                 <div className="card" style={{ padding: '16px' }}>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: '10px' }}>COMMISSION</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#4ADE80' }}>{formatCurrency(project.commission_amount)}</div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '2px' }}>@ {project.commission_percentage}% of {formatCurrency(project.loan_amount || 0)}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#4ADE80' }}>{project.commission_percent}%</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '2px' }}>of {formatCurrency(project.loan_amount || 0)}</div>
                   <div style={{ marginTop: '10px' }}>
                     <span className={`pill ${project.commission_status === 'paid' ? 'pill-green' : 'pill-red'}`}>
                       {project.commission_status === 'paid' ? '✓ Paid' : 'Pending'}
@@ -372,12 +372,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   </tr>
                 </thead>
                 <tbody>
-                  {docs.map((doc) => (
+                  {docs.map((doc: any) => (
                     <tr key={doc.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, background: doc.status === 'received' ? '#4ADE80' : doc.status === 'pending' ? '#FCD34D' : '#F87171' }} />
-                          <span style={{ color: 'var(--text-1)', fontWeight: 500, fontSize: '0.8rem' }}>{doc.name}</span>
+                          <span style={{ color: 'var(--text-1)', fontWeight: 500, fontSize: '0.8rem' }}>{doc.document_name}</span>
                         </div>
                       </td>
                       <td style={{ fontSize: '0.72rem' }}>{doc.category}</td>
@@ -408,7 +408,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {activeTab === 'queries' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{queries.length} total · {queries.filter(q => q.status === 'open').length} open</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{queries.length} total · {queries.filter((q: any) => q.status === 'open').length} open</span>
               <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Raise Query</button>
             </div>
             <div className="card">
@@ -416,24 +416,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <table className="tbl">
                   <thead><tr><th>Query</th><th>Type</th><th>Priority</th><th>Status</th><th>Raised By</th><th>Date</th><th></th></tr></thead>
                   <tbody>
-                    {queries.map((q) => (
+                    {queries.map((q: any) => (
                       <tr key={q.id}>
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.8rem' }}>{q.title}</div>
                           <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '2px' }}>{q.description.slice(0, 60)}…</div>
                         </td>
-                        <td><span className="pill pill-slate">{q.query_type}</span></td>
+                        <td><span className="pill pill-slate">{q.source}</span></td>
                         <td>
-                          <span className={`pill ${q.priority === 'high' ? 'pill-red' : q.priority === 'medium' ? 'pill-gold' : 'pill-slate'}`}>
-                            {q.priority}
-                          </span>
+                          <span className="pill pill-slate">Normal</span>
                         </td>
                         <td>
-                          <span className={`pill ${q.status === 'resolved' ? 'pill-green' : q.status === 'in_progress' ? 'pill-gold' : 'pill-red'}`}>
-                            {q.status.replace('_', ' ')}
+                          <span className={`pill ${q.status === 'resolved' ? 'pill-green' : 'pill-red'}`}>
+                            {q.status}
                           </span>
                         </td>
-                        <td style={{ fontSize: '0.72rem' }}>{q.raised_by_name}</td>
+                        <td style={{ fontSize: '0.72rem' }}>{q.raised_by}</td>
                         <td style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{fmtDate(q.created_at)}</td>
                         <td>
                           {q.status !== 'resolved' && (
@@ -455,7 +453,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {activeTab === 'banks' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{banks.length} banks suggested · {banks.filter(b => b.is_selected).length} selected by client</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{banks.length} banks suggested · {banks.filter((b: any) => b.is_selected).length} selected by client</span>
               <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Suggest Bank</button>
             </div>
             <div className="card">
@@ -463,7 +461,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <table className="tbl">
                   <thead><tr><th>Bank</th><th>Interest Rate</th><th>Processing Time</th><th>Commission</th><th>Est. EMI/mo</th><th>Client Status</th><th>Pros</th></tr></thead>
                   <tbody>
-                    {banks.map((b) => (
+                    {banks.map((b: any) => (
                       <tr key={b.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -518,12 +516,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             )}
             {notes.map((note: any) => (
               <div key={note.id} className="card" style={{ padding: '16px' }}>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-1)', lineHeight: 1.7, marginBottom: '12px' }}>{note.content}</p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-1)', lineHeight: 1.7, marginBottom: '12px' }}>{note.note}</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--bg-border)' }}>
-                  <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: getGrad(note.created_by_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, color: '#fff' }}>
-                    {getInitials(note.created_by_name)}
+                  <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: getGrad(note.created_by), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, color: '#fff' }}>
+                    {getInitials(note.created_by)}
                   </div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{note.created_by_name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{note.created_by}</span>
                   <span style={{ color: 'var(--text-4)', fontSize: '0.7rem' }}>·</span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-4)' }}>{timeAgo(note.created_at)}</span>
                 </div>
@@ -532,130 +530,27 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {/* ── Bank Comms Tab ── */}
-        {activeTab === 'communication' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
-              <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Log Communication</button>
-            </div>
-            <div className="card">
-              <div className="tbl-wrap">
-                <table className="tbl">
-                  <thead><tr><th>Type</th><th>Bank</th><th>Summary</th><th>Next Steps</th><th>By</th><th>Date</th></tr></thead>
-                  <tbody>
-                    {bankComms.map((c: any) => (
-                      <tr key={c.id}>
-                        <td>
-                          <span className={`pill ${c.communication_type === 'call' ? 'pill-blue' : c.communication_type === 'email' ? 'pill-purple' : 'pill-gold'}`}>
-                            {c.communication_type.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 600, color: 'var(--text-1)' }}>{c.bank_name}</td>
-                        <td style={{ maxWidth: '240px', fontSize: '0.76rem' }}>{c.summary}</td>
-                        <td style={{ fontSize: '0.72rem', color: '#F0B429' }}>{c.next_steps || '—'}</td>
-                        <td style={{ fontSize: '0.72rem' }}>{c.communicated_by_name}</td>
-                        <td style={{ fontSize: '0.7rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDateTime(c.communicated_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Activity Tab ── */}
         {activeTab === 'activity' && (
           <div className="card">
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>Description</th><th>Performed By</th><th>Time</th></tr></thead>
+                <thead><tr><th>Action</th><th>Performed By</th><th>Time</th></tr></thead>
                 <tbody>
                   {activity.map((log: any) => (
                     <tr key={log.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F0B429', flexShrink: 0 }} />
-                          <span style={{ color: 'var(--text-1)', fontSize: '0.8rem' }}>{log.description}</span>
+                          <span style={{ color: 'var(--text-1)', fontSize: '0.8rem' }}>{log.action}</span>
                         </div>
                       </td>
-                      <td style={{ fontSize: '0.72rem' }}>{log.performed_by_name}</td>
+                      <td style={{ fontSize: '0.72rem' }}>{log.performed_by}</td>
                       <td style={{ fontSize: '0.7rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDateTime(log.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── Messages Tab ── */}
-        {activeTab === 'messages' && (
-          <div className="card">
-            <div style={{ padding: '16px 18px', maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {messages.map((msg: any) => {
-                const isTeam = msg.sender_type === 'team';
-                return (
-                  <div key={msg.id} style={{ display: 'flex', gap: '10px', justifyContent: isTeam ? 'flex-end' : 'flex-start' }}>
-                    {!isTeam && (
-                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: getGrad(msg.sender_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                        {getInitials(msg.sender_name)}
-                      </div>
-                    )}
-                    <div style={{ maxWidth: '70%' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', justifyContent: isTeam ? 'flex-end' : 'flex-start' }}>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-2)' }}>{msg.sender_name}</span>
-                        <span className={`pill ${isTeam ? 'pill-gold' : 'pill-blue'}`} style={{ fontSize: '0.55rem' }}>{isTeam ? 'Leverest' : 'Client'}</span>
-                        <span style={{ fontSize: '0.62rem', color: 'var(--text-4)' }}>{timeAgo(msg.created_at)}</span>
-                      </div>
-                      <div style={{
-                        padding: '9px 13px', borderRadius: '10px',
-                        background: isTeam ? 'rgba(201,150,12,0.15)' : 'var(--bg-card-2)',
-                        border: `1px solid ${isTeam ? 'rgba(201,150,12,0.2)' : 'var(--bg-border)'}`,
-                        fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.5,
-                      }}>
-                        {msg.content}
-                      </div>
-                    </div>
-                    {isTeam && (
-                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: getGrad(msg.sender_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                        {getInitials(msg.sender_name)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ padding: '12px 18px', borderTop: '1px solid var(--bg-border)', display: 'flex', gap: '10px' }}>
-              <textarea
-                placeholder="Write a message to the client…"
-                value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
-                className="field"
-                style={{ flex: 1, minHeight: '56px', resize: 'none' }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (newMessage.trim()) {
-                      setMessages(prev => [...prev, { id: `m${Date.now()}`, project_id: id, content: newMessage, sender_id: user?.id || '', sender_name: user?.name || '', sender_type: 'team', created_at: new Date().toISOString(), read_by: [] }]);
-                      setNewMessage('');
-                    }
-                  }
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '5px' }}
-                disabled={!newMessage.trim()}
-                onClick={() => {
-                  if (newMessage.trim()) {
-                    setMessages(prev => [...prev, { id: `m${Date.now()}`, project_id: id, content: newMessage, sender_id: user?.id || '', sender_name: user?.name || '', sender_type: 'team', created_at: new Date().toISOString(), read_by: [] }]);
-                    setNewMessage('');
-                  }
-                }}
-              >
-                <Send size={14} /> Send
-              </button>
             </div>
           </div>
         )}

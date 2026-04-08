@@ -10,6 +10,13 @@ import { MANUFACTURING_SERVICE_CHECKLIST, NBFC_CHECKLIST } from '@/lib/types';
 export async function GET() {
   try {
     const user = await requireAuth();
+
+    // MOCK DATA FALLBACK
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+      const { getProjectsByUser } = await import('@/lib/mock-data');
+      return NextResponse.json({ projects: getProjectsByUser(user.email, user.role), user });
+    }
+
     const supabase = await createClient();
 
     // RLS automatically filters to projects where user_email is in project_members

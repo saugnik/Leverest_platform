@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import type { Database } from './types';
 
 /**
  * Creates a Supabase client for use in Server Components, Server Actions,
@@ -9,9 +8,9 @@ import type { Database } from './types';
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  return createServerClient<any>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-anon-key',
     {
       cookies: {
         getAll() {
@@ -39,9 +38,9 @@ export async function createClient() {
  */
 export async function createAdminClient() {
   const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
-  return createSupabaseClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  return createSupabaseClient<any>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy-service-role-key',
     {
       auth: {
         autoRefreshToken: false,

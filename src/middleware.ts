@@ -9,7 +9,7 @@ import { getSpocFromRequest } from '@/lib/auth';
  * - Client:   /client/** (SPOC only, cookie session)
  */
 
-const PUBLIC_PATHS = ['/', '/api/auth/login', '/api/auth/logout'];
+const PUBLIC_PATHS = ['/', '/api/auth/login', '/api/auth/logout', '/client/invite'];
 const CLIENT_PATHS = ['/client'];
 const INTERNAL_PATHS = ['/dashboard', '/api/projects', '/api/documents', '/api/queries', '/api/banks', '/api/notes', '/api/team', '/api/notifications'];
 

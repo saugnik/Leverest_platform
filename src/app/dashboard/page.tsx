@@ -41,8 +41,8 @@ function getScore(score: number) {
 }
 
 const AREA_DATA = [
-  { m: 'Oct', v: 42 }, { m: 'Nov', v: 68 }, { m: 'Dec', v: 55 },
-  { m: 'Jan', v: 90 }, { m: 'Feb', v: 120 }, { m: 'Mar', v: 148 }, { m: 'Apr', v: 108 },
+  { m: 'Oct', v: 0 }, { m: 'Nov', v: 0 }, { m: 'Dec', v: 0 },
+  { m: 'Jan', v: 0 }, { m: 'Feb', v: 0 }, { m: 'Mar', v: 0 }, { m: 'Apr', v: 0 },
 ];
 const BAR_DATA = PIPELINE_STAGES.map((s) => ({
   name: s.label.length > 10 ? s.label.slice(0, 8) + '…' : s.label,

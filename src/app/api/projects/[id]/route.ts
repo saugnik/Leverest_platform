@@ -12,6 +12,23 @@ export async function GET(_request: NextRequest, { params }: Params) {
     const { id } = await params;
     await requireProjectAccess(id);
 
+    // MOCK DATA FALLBACK
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+      const { MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_BANKS, MOCK_NOTES, MOCK_ACTIVITY } = await import('@/lib/mock-data');
+      const project = MOCK_PROJECTS.find(p => p.id === id);
+      if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+      return NextResponse.json({
+        project,
+        members: [{ user_email: 'admin@leverestfin.com', assigned_at: new Date().toISOString(), assigned_by: 'admin@leverestfin.com' }],
+        spocs: [{ id: 'spoc-1', name: 'John Doe', email: 'spoc@client.com', phone: '', designation: '', created_at: new Date().toISOString() }],
+        documents: MOCK_DOCUMENTS.filter(d => d.project_id === id),
+        queries: MOCK_QUERIES.filter(q => q.project_id === id),
+        banks: MOCK_BANKS.filter(b => b.project_id === id),
+        notes: MOCK_NOTES.filter(n => n.project_id === id),
+        activity: MOCK_ACTIVITY.filter(a => a.project_id === id),
+      });
+    }
+
     const supabase = await createClient();
 
     const [projectRes, membersRes, spocsRes, docsRes, queriesRes, banksRes, notesRes, activityRes] =

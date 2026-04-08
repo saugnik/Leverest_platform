@@ -62,7 +62,7 @@ export default function NewProjectPage() {
 
   const [form, setForm] = useState({
     company_name: '', company_type: '', loan_type: '', loan_amount: '',
-    lead_source: '', contact_person: '', contact_email: '', contact_phone: '',
+    lead_source: '',
     description: '', deadline: '', stage: 'lead_received',
     commission_percentage: '1.5',
     team: [] as string[],
@@ -97,9 +97,6 @@ export default function NewProjectPage() {
       created_at: now,
       updated_at: now,
       created_by: user?.email || '',
-      contact_person: form.contact_person,
-      contact_email: form.contact_email,
-      contact_phone: form.contact_phone,
       description: form.description,
       deadline: form.deadline,
     };
@@ -110,7 +107,7 @@ export default function NewProjectPage() {
     router.push('/dashboard/projects');
   }
 
-  const isValid = form.company_name && form.loan_type && form.loan_amount && form.contact_person;
+  const isValid = form.company_name && form.loan_type && form.loan_amount;
 
   return (
     <div style={{ padding: '1.75rem 2rem', maxWidth: '860px' }} className="fade-up">
@@ -199,23 +196,7 @@ export default function NewProjectPage() {
         </Row>
       </Section>
 
-      {/* Primary Contact */}
-      <Section title="Primary Contact (Client)">
-        <Row>
-          <div>
-            <Label>Contact Person Name *</Label>
-            <input className="field" placeholder="CFO / Finance Head name" value={form.contact_person} onChange={e => set('contact_person', e.target.value)} />
-          </div>
-          <div>
-            <Label>Contact Email</Label>
-            <input className="field" type="email" placeholder="contact@company.com" value={form.contact_email} onChange={e => set('contact_email', e.target.value)} />
-          </div>
-        </Row>
-        <div style={{ maxWidth: '300px' }}>
-          <Label>Contact Phone</Label>
-          <input className="field" placeholder="+91 98765 00000" value={form.contact_phone} onChange={e => set('contact_phone', e.target.value)} />
-        </div>
-      </Section>
+
 
       {/* Team Assignment */}
       <Section title="Assign Leverest Team">

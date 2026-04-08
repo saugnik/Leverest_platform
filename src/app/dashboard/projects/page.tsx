@@ -1,24 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
-import {
-  MOCK_PROJECTS, getProjectsByUser, formatCurrency, getProjectDocCompletionPercent
-} from '@/lib/mock-data';
+import { formatCurrency, getProjectDocCompletionPercent } from '@/lib/mock-data'; // Keep the UI helper functions
 import { PIPELINE_STAGES } from '@/lib/types';
 import { Plus, Search, ExternalLink, Filter } from 'lucide-react';
 
-function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
+function getInitials(n: string) { return n ? n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase() : '??'; }
 function getGrad(name: string) {
+  if (!name) return 'transparent';
   const g = ['linear-gradient(135deg,#C9960C,#8B5CF6)', 'linear-gradient(135deg,#3B82F6,#06B6D4)', 'linear-gradient(135deg,#22C55E,#059669)', 'linear-gradient(135deg,#F97316,#EF4444)', 'linear-gradient(135deg,#8B5CF6,#EC4899)'];
   return g[name.charCodeAt(0) % g.length];
 }
 function getStageLabel(s: string) {
   const m: Record<string,string> = {
-    lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',
-    internal_processing:'Processing',bank_connect:'Bank Connect',
-    proposal_sent:'Proposal Sent',bank_document_stage:'Bank Docs',approved:'Approved',
+    lead_received:'Lead',meeting_done:'Meeting',docs_requested:'Docs Requested',
+    processing:'Processing',bank_connect:'Bank Connect',
+    proposal_sent:'Proposal Sent',bank_docs:'Bank Docs',approved:'Approved',
   };
   return m[s] || s;
 }
@@ -36,21 +35,44 @@ function getScore(s: number) {
 
 export default function ProjectsPage() {
   const { user } = useAuth();
-  const allProjects = getProjectsByUser(user?.email || '', user?.role || '');
+  
+  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
   const [stage, setStage] = useState('all');
   const [type, setType] = useState('all');
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        if (data.projects) {
+          setAllProjects(data.projects);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
   const filtered = allProjects.filter((p) => {
     const q = search.toLowerCase();
-    const matchQ = !q || p.company_name.toLowerCase().includes(q) || p.contact_person?.toLowerCase().includes(q) || p.contact_email?.toLowerCase().includes(q);
+    const matchQ = !q || p.client_name?.toLowerCase().includes(q) || String(p.id).includes(q);
     const matchS = stage === 'all' || p.stage === stage;
     const matchT = type === 'all' || p.loan_type === type;
     return matchQ && matchS && matchT;
   });
 
   const canSeeCommission = ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'].includes(user?.role || '');
+
+  if (loading) {
+    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading projects...</div>;
+  }
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -60,7 +82,7 @@ export default function ProjectsPage() {
           <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>Projects</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '3px' }}>{filtered.length} of {allProjects.length} shown</div>
         </div>
-        {['admin','manager'].includes(user?.role || '') && (
+        {['admin','relation_manager','relation_partner'].includes(user?.role || '') && (
           <Link
             href="/dashboard/projects/new"
             style={{
@@ -117,7 +139,7 @@ export default function ProjectsPage() {
           <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
           <input
             type="text"
-            placeholder="Search company, contact, email…"
+            placeholder="Search client name…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="field"
@@ -141,21 +163,17 @@ export default function ProjectsPage() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Company</th>
+                <th>Client Name</th>
                 <th>Loan Type</th>
                 <th>Amount</th>
                 <th>Stage</th>
-                <th>Lead Source</th>
-                <th>Docs</th>
-                <th style={{ textAlign: 'center' }}>Score</th>
                 {canSeeCommission && <th>Commission</th>}
-                <th>Team</th>
+                <th>Branch</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((p, idx) => {
-                const comp = getProjectDocCompletionPercent(p.id);
                 const score = p.approval_score || 0;
                 return (
                   <tr key={p.id}>
@@ -164,68 +182,29 @@ export default function ProjectsPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                         <div style={{
                           width: '30px', height: '30px', borderRadius: '7px', flexShrink: 0,
-                          background: getGrad(p.company_name),
+                          background: getGrad(p.client_name),
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: '0.62rem', fontWeight: 700, color: '#fff',
                         }}>
-                          {getInitials(p.company_name)}
+                          {getInitials(p.client_name)}
                         </div>
                         <div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap' }}>{p.company_name}</div>
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{p.contact_person} · {p.contact_phone}</div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap' }}>{p.client_name}</div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{p.company_type}</div>
                         </div>
                       </div>
                     </td>
                     <td style={{ fontSize: '0.75rem', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{getLoanTypeLabel(p.loan_type || '')}</td>
                     <td style={{ color: '#F0B429', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{formatCurrency(p.loan_amount || 0)}</td>
                     <td><span className={`pill stage-${p.stage}`}>{getStageLabel(p.stage)}</span></td>
-                    <td style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{getLeadSourceLabel(p.lead_source || '')}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div className="progress-track" style={{ width: '44px' }}>
-                          <div className="progress-fill" style={{ width: `${comp}%` }} />
-                        </div>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: comp >= 70 ? '#4ADE80' : comp >= 40 ? '#FCD34D' : '#F87171' }}>{comp}%</span>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: getScore(score) }}>{score || '—'}</span>
-                    </td>
                     {canSeeCommission && (
                       <td>
-                        {p.commission_amount ? (
-                          <div>
-                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#4ADE80' }}>{formatCurrency(p.commission_amount)}</div>
-                            <div style={{ fontSize: '0.62rem', color: p.commission_status === 'paid' ? '#4ADE80' : '#F87171' }}>
-                              {p.commission_status || 'pending'}
-                            </div>
-                          </div>
+                        {p.commission_percent ? (
+                          <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#4ADE80' }}>{p.commission_percent}%</div>
                         ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
                       </td>
                     )}
-                    <td>
-                      <div style={{ display: 'flex', gap: '-4px' }}>
-                        {p.assigned_team.slice(0, 3).map((email) => {
-                          const name = email.split('@')[0].replace('.', ' ');
-                          return (
-                            <div
-                              key={email}
-                              title={email}
-                              style={{
-                                width: '22px', height: '22px', borderRadius: '50%',
-                                background: getGrad(email),
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '0.54rem', fontWeight: 700, color: '#fff',
-                                border: '2px solid var(--bg-card)',
-                                marginLeft: '-4px',
-                              }}
-                            >
-                              {getInitials(name)}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
+                    <td style={{ fontSize: '0.76rem', textTransform: 'capitalize' }}>{p.branch}</td>
                     <td>
                       <Link
                         href={`/dashboard/projects/${p.id}`}

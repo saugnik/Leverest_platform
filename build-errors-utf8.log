@@ -1,0 +1,69 @@
+﻿
+> leverest-platform@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.2.2 (Turbopack)
+
+node.exe : ΓÜá The 
+"middleware" file 
+convention is deprecated. 
+Please use "proxy" 
+instead. Learn more: https
+://nextjs.org/docs/message
+s/middleware-to-proxy
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (Γ  
+  Üá The "middle...lewa   
+ re-to-proxy:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build 
+failed with 4 errors:
+./src/app/(internal)
+You cannot have two 
+parallel pages that 
+resolve to the same path. 
+Please check 
+/(client)/banks and 
+/(internal).
+
+./src/app/(internal)
+You cannot have two 
+parallel pages that 
+resolve to the same path. 
+Please check 
+/(client)/dashboard and 
+/(internal).
+
+./src/app/(internal)
+You cannot have two 
+parallel pages that 
+resolve to the same path. 
+Please check 
+/(client)/documents and 
+/(internal).
+
+./src/app/(internal)
+You cannot have two 
+parallel pages that 
+resolve to the same path. 
+Please check 
+/(client)/queries and 
+/(internal).
+
+    at ignore-listed 
+frames

@@ -1,37 +1,62 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_DOCUMENTS, MOCK_PROJECTS, getProjectsByUser, formatCurrency } from '@/lib/mock-data';
 import { Search, Upload, ExternalLink, FileText } from 'lucide-react';
 
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
 
 export default function DocumentsPage() {
   const { user } = useAuth();
-  const projects = getProjectsByUser(user?.email || '', user?.role || '');
-  const projectIds = projects.map(p => p.id);
-  const allDocs = MOCK_DOCUMENTS.filter(d => projectIds.includes(d.project_id));
+  
+  const [projects, setProjects] = useState<any[]>([]);
+  const [allDocs, setAllDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
 
-  const categories = [...new Set(allDocs.map(d => d.category))];
+  useEffect(() => {
+    async function load() {
+      try {
+        const [docsRes, projRes] = await Promise.all([
+          fetch('/api/documents'),
+          fetch('/api/projects')
+        ]);
+        const dbDocs = await docsRes.json();
+        const dbProj = await projRes.json();
+        setAllDocs(dbDocs.documents || []);
+        setProjects(dbProj.projects || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
-  const filtered = allDocs.filter(d => {
-    const matchQ = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.category.toLowerCase().includes(search.toLowerCase());
+  const categories = [...new Set(allDocs.map((d: any) => d.category))];
+
+  const filtered = allDocs.filter((d: any) => {
+    const docName = d.document_name || '';
+    const matchQ = !search || docName.toLowerCase().includes(search.toLowerCase()) || d.category.toLowerCase().includes(search.toLowerCase());
     const matchP = filterProject === 'all' || d.project_id === filterProject;
     const matchS = filterStatus === 'all' || d.status === filterStatus;
     const matchC = filterCat === 'all' || d.category === filterCat;
     return matchQ && matchP && matchS && matchC;
   });
 
-  const received = allDocs.filter(d => d.status === 'received').length;
-  const pending  = allDocs.filter(d => d.status === 'pending').length;
-  const required = allDocs.filter(d => d.status === 'required').length;
+  const received = allDocs.filter((d: any) => d.status === 'received').length;
+  const pending  = allDocs.filter((d: any) => d.status === 'pending').length;
+  const required = allDocs.filter((d: any) => d.status === 'required').length;
   const pct = allDocs.length ? Math.round((received / allDocs.length) * 100) : 0;
+
+  if (loading) {
+    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading documents...</div>;
+  }
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -77,7 +102,7 @@ export default function DocumentsPage() {
         </div>
         <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="field" style={{ width: 'auto' }}>
           <option value="all">All Projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.company_name}</option>)}
+          {projects.map((p: any) => <option key={p.id} value={p.id}>{p.client_name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="field" style={{ width: 'auto' }}>
           <option value="all">All Status</option>
@@ -87,7 +112,7 @@ export default function DocumentsPage() {
         </select>
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="field" style={{ width: 'auto' }}>
           <option value="all">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c: any) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -108,18 +133,18 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(doc => {
-                const proj = projects.find(p => p.id === doc.project_id);
+              {filtered.map((doc: any) => {
+                const proj = projects.find((p: any) => p.id === doc.project_id);
                 return (
                   <tr key={doc.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileText size={13} color={doc.status === 'received' ? '#4ADE80' : doc.status === 'pending' ? '#FCD34D' : '#F87171'} style={{ flexShrink: 0 }} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-1)' }}>{doc.name}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-1)' }}>{doc.document_name}</span>
                       </div>
                     </td>
                     <td style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{doc.category}</td>
-                    <td style={{ fontSize: '0.74rem', color: 'var(--gold)' }}>{proj?.company_name || '—'}</td>
+                    <td style={{ fontSize: '0.74rem', color: 'var(--gold)' }}>{proj?.client_name || '—'}</td>
                     <td>
                       <span className={`pill ${doc.status === 'received' ? 'pill-green' : doc.status === 'pending' ? 'pill-gold' : 'pill-red'}`}>
                         {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
