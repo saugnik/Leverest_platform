@@ -1,9 +1,18 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow } from 'date-fns';
+import { UserRole } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/**
+ * Check if a user can view finance-related data (commission, loan amounts, revenue, etc.)
+ * Only admin and accounts role can access finance data
+ */
+export function canViewFinanceData(userRole: UserRole | string | undefined): boolean {
+  return userRole === 'admin' || userRole === 'accounts';
 }
 
 export function formatDate(dateStr: string): string {
@@ -39,9 +48,7 @@ export function getStageColor(stage: string): string {
     meeting_done: 'text-blue-400 bg-blue-400/10',
     documents_requested: 'text-purple-400 bg-purple-400/10',
     internal_processing: 'text-amber-400 bg-amber-400/10',
-    bank_connect: 'text-orange-400 bg-orange-400/10',
     proposal_sent: 'text-cyan-400 bg-cyan-400/10',
-    bank_document_stage: 'text-indigo-400 bg-indigo-400/10',
     approved: 'text-emerald-400 bg-emerald-400/10',
   };
   return colors[stage] || 'text-slate-400 bg-slate-400/10';
@@ -53,9 +60,7 @@ export function getStageBorder(stage: string): string {
     meeting_done: 'border-blue-500',
     documents_requested: 'border-purple-500',
     internal_processing: 'border-amber-500',
-    bank_connect: 'border-orange-500',
     proposal_sent: 'border-cyan-500',
-    bank_document_stage: 'border-indigo-500',
     approved: 'border-emerald-500',
   };
   return colors[stage] || 'border-slate-500';
@@ -102,9 +107,7 @@ export function getStageLabel(stage: string): string {
     meeting_done: 'Meeting Done',
     documents_requested: 'Docs Requested',
     internal_processing: 'Internal Processing',
-    bank_connect: 'Bank Connect',
     proposal_sent: 'Proposal Sent',
-    bank_document_stage: 'Bank Doc Stage',
     approved: 'Approved',
   };
   return map[stage] || stage;

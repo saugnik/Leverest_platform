@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import { MOCK_PROJECTS, MOCK_SPOCS, MOCK_QUERIES, MOCK_BANK_SUGGESTIONS, getProjectDocCompletionPercent, formatCurrency, MOCK_DOCUMENTS } from '@/lib/mock-data';
+import { MOCK_PROJECTS, MOCK_SPOCS, MOCK_QUERIES, getProjectDocCompletionPercent, formatCurrency, MOCK_DOCUMENTS } from '@/lib/mock-data';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
 import { Upload, MessageSquare, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -24,7 +24,6 @@ export default function ClientDashboard() {
 
   const docs = MOCK_DOCUMENTS.filter(d => d.project_id === project.id);
   const queries = MOCK_QUERIES.filter(q => q.project_id === project.id && q.status !== 'resolved');
-  const banks = MOCK_BANK_SUGGESTIONS.filter(b => b.project_id === project.id);
   const completion = getProjectDocCompletionPercent(project.id);
   const currentStageIdx = PIPELINE_STAGES.findIndex(s => s.id === project.stage);
 
@@ -33,7 +32,7 @@ export default function ClientDashboard() {
   const missing  = docs.filter(d => d.status === 'required').length;
 
   function getStageLabel(s: string) {
-    const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting Done',documents_requested:'Docs Requested',internal_processing:'Processing',bank_connect:'Bank Connect',proposal_sent:'Proposal Sent',bank_document_stage:'Bank Docs',approved:'Approved' };
+    const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting Done',documents_requested:'Docs Requested',internal_processing:'Processing',proposal_sent:'Proposal Sent',approved:'Approved' };
     return m[s] || s;
   }
 
@@ -65,12 +64,11 @@ export default function ClientDashboard() {
       </div>
 
       {/* KPI row */}
-      <div className="grid-4" style={{ marginBottom: '20px' }}>
+      <div className="grid-3" style={{ marginBottom: '20px' }}>
         {[
           { label: 'Docs Received', value: received, color: '#4ADE80', link: '/client/documents' },
           { label: 'Docs Pending', value: pending, color: '#FCD34D', link: '/client/documents' },
           { label: 'Open Queries', value: queries.length, color: '#F87171', link: '/client/queries' },
-          { label: 'Banks Suggested', value: banks.length, color: '#60A5FA', link: '/client/banks' },
         ].map(k => (
           <Link key={k.label} href={k.link} style={{ textDecoration: 'none' }}>
             <div className="stat-card" style={{ cursor: 'pointer' }}>

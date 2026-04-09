@@ -11,7 +11,7 @@ const TABS = [
   { href: '/client',          label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/client/documents',label: 'My Documents', icon: FileText },
   { href: '/client/queries',  label: 'Bank Queries', icon: MessageSquare },
-  { href: '/client/banks',    label: 'Choose Bank',  icon: Banknote },
+
   { href: '/client/timeline', label: 'Deal Timeline',icon: Clock },
   { href: '/client/messages', label: 'Messages',     icon: MessageCircle },
 ];

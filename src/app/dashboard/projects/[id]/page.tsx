@@ -5,15 +5,16 @@ import { useAuth } from '@/context/auth-context';
 import {
   getProjectDocCompletionPercent, formatCurrency,
 } from '@/lib/mock-data';
+import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
 import {
-  ArrowLeft, FileText, MessageSquare, Banknote, StickyNote, Activity,
+  ArrowLeft, FileText, MessageSquare, StickyNote, Activity,
   CheckCircle2, Clock, AlertCircle, Upload, ExternalLink, Plus, Send,
   Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock,
 } from 'lucide-react';
 
-type Tab = 'overview' | 'documents' | 'queries' | 'banks' | 'notes' | 'activity';
+type Tab = 'overview' | 'documents' | 'queries' | 'notes' | 'activity';
 
 function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
 function getGrad(name: string) {
@@ -21,7 +22,7 @@ function getGrad(name: string) {
   return g[name.charCodeAt(0) % g.length];
 }
 function getStageLabel(s: string) {
-  const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',internal_processing:'Internal Processing',bank_connect:'Bank Connect',proposal_sent:'Proposal Sent',bank_document_stage:'Bank Docs',approved:'Approved' };
+  const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',internal_processing:'Internal Processing',proposal_sent:'Proposal Sent',approved:'Approved' };
   return m[s] || s;
 }
 function getLoanTypeLabel(t: string) {
@@ -60,7 +61,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading...</div>;
 
-  const { project, documents: docs = [], queries = [], banks = [], notes = [], activity = [], spocs = [], members = [] } = data || {};
+  const { project, documents: docs = [], queries = [], notes = [], activity = [], spocs = [], members = [] } = data || {};
 
   if (!project) return (
     <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
@@ -72,7 +73,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const score = project.approval_score || 0;
   const scoreColor = score >= 75 ? '#4ADE80' : score >= 55 ? '#FCD34D' : '#F87171';
 
-  const canSeeCommission = ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'].includes(user?.role || '');
+  const canSeeCommission = canViewFinanceData(user?.role);
   const canAddNotes = user?.role !== 'client_spoc';
   const currentStageIdx = PIPELINE_STAGES.findIndex(s => s.id === project.stage);
 
@@ -80,7 +81,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     { id: 'overview',       label: 'Overview',      icon: TrendingUp },
     { id: 'documents',      label: 'Documents',     icon: FileText,       count: docs.length },
     { id: 'queries',        label: 'Queries',       icon: MessageSquare,  count: queries.filter((q: any) => q.status !== 'resolved').length },
-    { id: 'banks',          label: 'Banks',         icon: Banknote,       count: banks.length },
     { id: 'notes',          label: 'Internal Notes',icon: StickyNote,     count: notes.length },
     { id: 'activity',       label: 'Activity',      icon: Activity,       count: activity.length },
   ];
@@ -160,7 +160,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       {/* Key Metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '18px' }}>
         {[
-          { label: 'Loan Amount', value: formatCurrency(project.loan_amount || 0), color: '#F0B429' },
+          { label: 'Loan Amount', value: canSeeCommission ? formatCurrency(project.loan_amount || 0) : '—', color: '#F0B429' },
           { label: 'Loan Type', value: getLoanTypeLabel(project.loan_type || ''), color: 'var(--text-1)' },
           { label: 'Lead Source', value: getLeadSourceLabel(project.lead_source || ''), color: 'var(--text-1)' },
           { label: 'Commission', value: canSeeCommission ? formatCurrency(project.commission_amount || 0) : '—', color: '#4ADE80' },
@@ -319,7 +319,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   {[
                     { label: 'Doc Completeness', v: completion },
                     { label: 'Financial Health', v: 75 },
-                    { label: 'Bank Fit', v: 85 },
+
                     { label: 'Credit Rating', v: 60 },
                   ].map((item) => (
                     <div key={item.label}>
@@ -449,53 +449,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {/* ── Banks Tab ── */}
-        {activeTab === 'banks' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{banks.length} banks suggested · {banks.filter((b: any) => b.is_selected).length} selected by client</span>
-              <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Suggest Bank</button>
-            </div>
-            <div className="card">
-              <div className="tbl-wrap">
-                <table className="tbl">
-                  <thead><tr><th>Bank</th><th>Interest Rate</th><th>Processing Time</th><th>Commission</th><th>Est. EMI/mo</th><th>Client Status</th><th>Pros</th></tr></thead>
-                  <tbody>
-                    {banks.map((b: any) => (
-                      <tr key={b.id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '1.1rem' }}>🏦</span>
-                            <div>
-                              <div style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.82rem' }}>{b.bank_name}</div>
-                              <div style={{ fontSize: '0.62rem', color: 'var(--text-3)' }}>Suggested {fmtDate(b.suggested_at)}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ color: '#F0B429', fontWeight: 800, fontSize: '0.9rem' }}>{b.interest_rate}%</td>
-                        <td style={{ fontSize: '0.75rem' }}>{b.processing_time}</td>
-                        <td style={{ color: '#4ADE80', fontWeight: 700 }}>{b.commission_percentage}%</td>
-                        <td style={{ fontSize: '0.78rem' }}>{b.emi_estimate ? formatCurrency(b.emi_estimate) : '—'}</td>
-                        <td>
-                          {b.is_selected
-                            ? <span className="pill pill-gold">✓ Selected</span>
-                            : <span className="pill pill-slate">Not selected</span>}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                            {b.pros?.slice(0,2).map((p: string) => (
-                              <span key={p} style={{ fontSize: '0.6rem', background: 'rgba(34,197,94,0.08)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '4px', padding: '1px 5px' }}>{p}</span>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ── Internal Notes Tab ── */}
         {activeTab === 'notes' && (

@@ -8,15 +8,22 @@ import { Bell, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, ready } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthenticated) router.push('/');
-    else if (user?.role === 'client_spoc') router.push('/client');
-  }, [isAuthenticated, user, router]);
+    // Only redirect after auth context has read localStorage
+    // This prevents bouncing users back to login before their session is loaded
+    if (!ready) return;
+    if (!isAuthenticated) {
+      router.replace('/');
+    } else if (user?.role === 'client_spoc') {
+      router.replace('/client');
+    }
+  }, [ready, isAuthenticated, user, router]);
 
-  if (!isAuthenticated || user?.role === 'client_spoc') {
+  // Show spinner until localStorage has been read AND user is authenticated
+  if (!ready || !isAuthenticated || user?.role === 'client_spoc') {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#03080F' }}>
         <svg className="spin" width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -43,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {['admin', 'manager'].includes(user?.role || '') && (
+            {['admin', 'relation_manager'].includes(user?.role || '') && (
               <Link
                 href="/dashboard/projects/new"
                 style={{

@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
         const { MOCK_USERS } = await import('@/lib/mock-data');
         const user = MOCK_USERS.find(u => u.email === email);
-        if (!user || password !== 'password123') { // Simple mock verification
-          return NextResponse.json({ error: 'Invalid mock credentials. Try admin@leverestfin.com / password123' }, { status: 401 });
+        if (!user || (password !== 'password' && password !== 'admin')) { // Simple mock verification
+          return NextResponse.json({ error: 'Invalid mock credentials. Try demo passwords' }, { status: 401 });
         }
         
         // Build mock JWT or secure cookie (we'll just use SPOC logic for mock internal in dev, or fake it)
@@ -95,10 +95,10 @@ export async function POST(request: NextRequest) {
 
       if (isMissingDB) {
         // MOCK FALLBACK
-        const { MOCK_SPOCS } = await import('@/lib/mock-data');
-        const spoc = MOCK_SPOCS.find(s => s.email === email);
-        if (!spoc || password !== 'password123') {
-          return NextResponse.json({ error: 'Invalid mock credentials. Try spoc@client.com / password123' }, { status: 401 });
+        const { getDynamicSpocs } = await import('@/lib/dynamic');
+        const spoc = getDynamicSpocs().find(s => s.email === email);
+        if (!spoc || (password !== 'password' && spoc.password_hash !== password)) {
+          return NextResponse.json({ error: 'Invalid mock credentials. Try demo passwords' }, { status: 401 });
         }
         sessionPayload = {
           id: spoc.id,

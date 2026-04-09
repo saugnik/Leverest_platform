@@ -19,9 +19,7 @@ export type PipelineStage =
   | 'meeting_done'
   | 'documents_requested'
   | 'internal_processing'
-  | 'bank_connect'
   | 'proposal_sent'
-  | 'bank_document_stage'
   | 'approved';
 
 export type CompanyType = 'manufacturing_service' | 'nbfc';
@@ -61,7 +59,6 @@ export interface Project {
   commission_percentage?: number;
   commission_amount?: number;
   commission_status?: 'pending' | 'partial' | 'paid';
-  selected_bank?: string;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -116,7 +113,7 @@ export interface Query {
   description: string;
   raised_by: string;
   raised_by_name: string;
-  query_type: 'bank' | 'internal' | 'document';
+  query_type: 'internal' | 'document';
   status: 'open' | 'in_progress' | 'resolved';
   priority: 'low' | 'medium' | 'high';
   response?: string;
@@ -126,21 +123,7 @@ export interface Query {
   resolved_at?: string;
 }
 
-export interface BankSuggestion {
-  id: string;
-  project_id: string;
-  bank_name: string;
-  interest_rate: number;
-  processing_time: string;
-  commission_percentage: number;
-  emi_estimate?: number;
-  pros?: string[];
-  cons?: string[];
-  is_selected: boolean;
-  suggested_by: string;
-  suggested_at: string;
-}
-
+// Bank concepts removed
 export interface ActivityLog {
   id: string;
   project_id: string;
@@ -162,18 +145,6 @@ export interface InternalNote {
   updated_at: string;
 }
 
-export interface BankCommunication {
-  id: string;
-  project_id: string;
-  bank_name: string;
-  communication_type: 'call' | 'email' | 'meeting';
-  summary: string;
-  next_steps?: string;
-  communicated_by: string;
-  communicated_by_name: string;
-  communicated_at: string;
-}
-
 export interface Message {
   id: string;
   project_id: string;
@@ -190,7 +161,7 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'document' | 'query' | 'bank' | 'stage' | 'deadline' | 'message';
+  type: 'document' | 'query' | 'stage' | 'deadline' | 'message';
   project_id?: string;
   is_read: boolean;
   created_at: string;
@@ -275,9 +246,7 @@ export const PIPELINE_STAGES: { id: PipelineStage; label: string; description: s
   { id: 'meeting_done', label: 'Meeting Done', description: 'Client meeting completed' },
   { id: 'documents_requested', label: 'Documents Requested', description: 'Checklist activated' },
   { id: 'internal_processing', label: 'Internal Processing', description: 'Leverest internal review' },
-  { id: 'bank_connect', label: 'Bank Connect', description: 'Bank connected, commission set' },
   { id: 'proposal_sent', label: 'Proposal Sent', description: 'Proposal submitted to client' },
-  { id: 'bank_document_stage', label: 'Bank Document Stage', description: 'Bank docs collected' },
   { id: 'approved', label: 'Approved', description: 'Loan sanctioned' },
 ];
 

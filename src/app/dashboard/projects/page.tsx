@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { formatCurrency, getProjectDocCompletionPercent } from '@/lib/mock-data'; // Keep the UI helper functions
+import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import { Plus, Search, ExternalLink, Filter } from 'lucide-react';
 
@@ -16,8 +17,7 @@ function getGrad(name: string) {
 function getStageLabel(s: string) {
   const m: Record<string,string> = {
     lead_received:'Lead',meeting_done:'Meeting',docs_requested:'Docs Requested',
-    processing:'Processing',bank_connect:'Bank Connect',
-    proposal_sent:'Proposal Sent',bank_docs:'Bank Docs',approved:'Approved',
+    internal_processing:'Processing',proposal_sent:'Proposal Sent',approved:'Approved',
   };
   return m[s] || s;
 }
@@ -68,7 +68,8 @@ export default function ProjectsPage() {
     return matchQ && matchS && matchT;
   });
 
-  const canSeeCommission = ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'].includes(user?.role || '');
+  const isAdmin = user?.role === 'admin';
+  const canSeeCommission = canViewFinanceData(user?.role);
 
   if (loading) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading projects...</div>;
@@ -82,7 +83,7 @@ export default function ProjectsPage() {
           <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>Projects</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '3px' }}>{filtered.length} of {allProjects.length} shown</div>
         </div>
-        {['admin','relation_manager','relation_partner'].includes(user?.role || '') && (
+        {['admin', 'relation_manager'].includes(user?.role || '') && (
           <Link
             href="/dashboard/projects/new"
             style={{
@@ -165,7 +166,7 @@ export default function ProjectsPage() {
                 <th>#</th>
                 <th>Client Name</th>
                 <th>Loan Type</th>
-                <th>Amount</th>
+                {isAdmin && <th>Amount</th>}
                 <th>Stage</th>
                 {canSeeCommission && <th>Commission</th>}
                 <th>Branch</th>
@@ -195,7 +196,7 @@ export default function ProjectsPage() {
                       </div>
                     </td>
                     <td style={{ fontSize: '0.75rem', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{getLoanTypeLabel(p.loan_type || '')}</td>
-                    <td style={{ color: '#F0B429', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{formatCurrency(p.loan_amount || 0)}</td>
+                    {isAdmin && <td style={{ color: '#F0B429', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{formatCurrency(p.loan_amount || 0)}</td>}
                     <td><span className={`pill stage-${p.stage}`}>{getStageLabel(p.stage)}</span></td>
                     {canSeeCommission && (
                       <td>

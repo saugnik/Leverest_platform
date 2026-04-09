@@ -61,9 +61,7 @@ const STAGES = [
   'meeting_done',
   'documents_requested',
   'internal_processing',
-  'bank_connect',
   'proposal_sent',
-  'bank_document_stage',
   'approved',
 ];
 

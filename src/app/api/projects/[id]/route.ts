@@ -14,7 +14,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
     // MOCK DATA FALLBACK
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
-      const { MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_BANKS, MOCK_NOTES, MOCK_ACTIVITY } = await import('@/lib/mock-data');
+      const { MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_NOTES, MOCK_ACTIVITY_LOGS } = await import('@/lib/mock-data');
       const project = MOCK_PROJECTS.find(p => p.id === id);
       if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
       return NextResponse.json({
@@ -23,22 +23,21 @@ export async function GET(_request: NextRequest, { params }: Params) {
         spocs: [{ id: 'spoc-1', name: 'John Doe', email: 'spoc@client.com', phone: '', designation: '', created_at: new Date().toISOString() }],
         documents: MOCK_DOCUMENTS.filter(d => d.project_id === id),
         queries: MOCK_QUERIES.filter(q => q.project_id === id),
-        banks: MOCK_BANKS.filter(b => b.project_id === id),
+
         notes: MOCK_NOTES.filter(n => n.project_id === id),
-        activity: MOCK_ACTIVITY.filter(a => a.project_id === id),
+        activity: MOCK_ACTIVITY_LOGS.filter(a => a.project_id === id),
       });
     }
 
     const supabase = await createClient();
 
-    const [projectRes, membersRes, spocsRes, docsRes, queriesRes, banksRes, notesRes, activityRes] =
+    const [projectRes, membersRes, spocsRes, docsRes, queriesRes, notesRes, activityRes] =
       await Promise.all([
         supabase.from('projects').select('*').eq('id', id).single(),
         supabase.from('project_members').select('user_email, assigned_at, assigned_by').eq('project_id', id),
         supabase.from('client_spocs').select('id, name, email, phone, designation, created_at').eq('project_id', id),
         supabase.from('documents').select('*').eq('project_id', id).order('category'),
         supabase.from('queries').select('*').eq('project_id', id).order('created_at', { ascending: false }),
-        supabase.from('bank_suggestions').select('*').eq('project_id', id).order('created_at', { ascending: false }),
         supabase.from('internal_notes').select('*').eq('project_id', id).order('created_at', { ascending: false }),
         supabase.from('activity_log').select('*').eq('project_id', id).order('created_at', { ascending: false }).limit(20),
       ]);
@@ -53,7 +52,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       spocs: spocsRes.data || [],
       documents: docsRes.data || [],
       queries: queriesRes.data || [],
-      banks: banksRes.data || [],
+
       notes: notesRes.data || [],
       activity: activityRes.data || [],
     });
@@ -76,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const user = await requireProjectAccess(id);
 
     const body = await request.json();
-    const allowedFields = ['stage', 'bank', 'commission_percent', 'loan_amount', 'loan_type', 'client_name'];
+    const allowedFields = ['stage', 'commission_percent', 'loan_amount', 'loan_type', 'client_name'];
     const updates: Record<string, unknown> = {};
 
     for (const field of allowedFields) {

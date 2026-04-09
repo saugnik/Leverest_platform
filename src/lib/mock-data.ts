@@ -3,10 +3,8 @@ import {
   Project,
   DocumentItem,
   Query,
-  BankSuggestion,
   ActivityLog,
   InternalNote,
-  BankCommunication,
   Message,
   Notification,
   ClientSPOC,
@@ -75,10 +73,6 @@ export const MOCK_DOCUMENTS: DocumentItem[] = [];
 
 export const MOCK_QUERIES: Query[] = [];
 
-// ─── MOCK BANK SUGGESTIONS ─────────────────────────────────────────────────────
-
-export const MOCK_BANK_SUGGESTIONS: BankSuggestion[] = [];
-
 // ─── MOCK ACTIVITY LOGS ─────────────────────────────────────────────────────────
 
 export const MOCK_ACTIVITY_LOGS: ActivityLog[] = [];
@@ -86,10 +80,6 @@ export const MOCK_ACTIVITY_LOGS: ActivityLog[] = [];
 // ─── MOCK INTERNAL NOTES ───────────────────────────────────────────────────────
 
 export const MOCK_NOTES: InternalNote[] = [];
-
-// ─── MOCK BANK COMMUNICATIONS ──────────────────────────────────────────────────
-
-export const MOCK_BANK_COMMS: BankCommunication[] = [];
 
 // ─── MOCK MESSAGES ─────────────────────────────────────────────────────────────
 
@@ -136,9 +126,7 @@ export function getStageIndex(stage: string): number {
     'meeting_done',
     'documents_requested',
     'internal_processing',
-    'bank_connect',
     'proposal_sent',
-    'bank_document_stage',
     'approved',
   ];
   return stages.indexOf(stage);

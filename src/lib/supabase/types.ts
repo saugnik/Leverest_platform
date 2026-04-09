@@ -43,7 +43,6 @@ export type Database = {
           company_type: Database['public']['Enums']['company_type'];
           loan_type: string | null;
           loan_amount: number | null;
-          bank: string | null;
           commission_percent: number | null;
           stage: Database['public']['Enums']['pipeline_stage'];
           branch: Database['public']['Enums']['branch_type'];
@@ -56,7 +55,6 @@ export type Database = {
           company_type: Database['public']['Enums']['company_type'];
           loan_type?: string | null;
           loan_amount?: number | null;
-          bank?: string | null;
           commission_percent?: number | null;
           stage?: Database['public']['Enums']['pipeline_stage'];
           branch: Database['public']['Enums']['branch_type'];
@@ -157,33 +155,7 @@ export type Database = {
         };
         Update: Partial<Database['public']['Tables']['queries']['Insert']>;
       };
-      bank_suggestions: {
-        Row: {
-          id: string;
-          project_id: string;
-          bank_name: string;
-          interest_rate: number | null;
-          processing_days: number | null;
-          commission_percent: number | null;
-          notes: string | null;
-          is_selected: boolean;
-          suggested_by: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          project_id: string;
-          bank_name: string;
-          interest_rate?: number | null;
-          processing_days?: number | null;
-          commission_percent?: number | null;
-          notes?: string | null;
-          is_selected?: boolean;
-          suggested_by: string;
-          created_at?: string;
-        };
-        Update: Partial<Database['public']['Tables']['bank_suggestions']['Insert']>;
-      };
+
       internal_notes: {
         Row: {
           id: string;
@@ -260,13 +232,11 @@ export type Database = {
         | 'meeting_done'
         | 'docs_requested'
         | 'processing'
-        | 'bank_connect'
         | 'proposal_sent'
-        | 'bank_docs'
         | 'approved';
       doc_status: 'received' | 'pending' | 'required';
       file_source: 'gmail' | 'drive' | 'manual';
-      query_source: 'bank' | 'internal';
+      query_source: 'internal';
       query_status: 'open' | 'resolved';
     };
   };

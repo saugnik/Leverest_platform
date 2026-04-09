@@ -5,8 +5,11 @@ import {
   MOCK_PROJECTS, MOCK_ACTIVITY_LOGS, getProjectsByUser,
   formatCurrency, getProjectDocCompletionPercent
 } from '@/lib/mock-data';
+import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
@@ -25,8 +28,7 @@ function getPillClass(stage: string) {
 function getStageLabel(s: string) {
   const m: Record<string,string> = {
     lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',
-    internal_processing:'Processing',bank_connect:'Bank Connect',
-    proposal_sent:'Proposal Sent',bank_document_stage:'Bank Docs',approved:'Approved',
+    internal_processing:'Processing',proposal_sent:'Proposal Sent',approved:'Approved',
   };
   return m[s] || s;
 }
@@ -44,10 +46,7 @@ const AREA_DATA = [
   { m: 'Oct', v: 0 }, { m: 'Nov', v: 0 }, { m: 'Dec', v: 0 },
   { m: 'Jan', v: 0 }, { m: 'Feb', v: 0 }, { m: 'Mar', v: 0 }, { m: 'Apr', v: 0 },
 ];
-const BAR_DATA = PIPELINE_STAGES.map((s) => ({
-  name: s.label.length > 10 ? s.label.slice(0, 8) + '…' : s.label,
-  count: MOCK_PROJECTS.filter((p) => p.stage === s.id).length,
-}));
+
 
 function greeting() {
   const h = new Date().getHours();
@@ -58,7 +57,20 @@ function greeting() {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user?.role === 'accounts') {
+      router.replace('/dashboard/commission');
+    }
+  }, [user, router]);
+
   const projects = getProjectsByUser(user?.email || '', user?.role || '');
+  const canViewFinance = canViewFinanceData(user?.role);
+
+  if (user?.role === 'accounts') {
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Redirecting to Finance view...</div>;
+  }
 
   const totalLoan      = projects.reduce((s, p) => s + (p.loan_amount || 0), 0);
   const active         = projects.filter(p => !['approved','lead_received'].includes(p.stage)).length;
@@ -66,7 +78,8 @@ export default function DashboardPage() {
   const totalComm      = projects.reduce((s, p) => s + (p.commission_amount || 0), 0);
   const needsAttention = projects.filter(p => (p.approval_score || 100) < 60);
 
-  const canSeeCommission = ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'].includes(user?.role || '');
+  const pendingQueries = 0; // Will be populated from real data
+  const docCompletion  = projects.length > 0 ? Math.round(projects.reduce((s, p) => s + getProjectDocCompletionPercent(p.id), 0) / projects.length) : 0;
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -82,30 +95,49 @@ export default function DashboardPage() {
 
       {/* ── KPI Row ── */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
-        {[
+        {(canViewFinance ? [
           {
             label: 'Total Loan Value', value: formatCurrency(totalLoan),
             icon: TrendingUp, bg: 'rgba(201,150,12,0.1)', color: '#F0B429',
-            sub: `${projects.length} projects`, trend: '+18% MoM', trendColor: '#4ADE80',
-            show: true,
+            sub: `${projects.length} projects`, trend: '+18% MoM',
           },
           {
             label: 'Active Deals', value: active,
             icon: FolderKanban, bg: 'rgba(96,165,250,0.1)', color: '#60A5FA',
-            sub: 'In pipeline', show: true,
+            sub: 'In pipeline',
           },
           {
             label: 'Approved', value: approved,
             icon: CheckCircle2, bg: 'rgba(34,197,94,0.1)', color: '#4ADE80',
-            sub: 'This quarter', show: true,
+            sub: 'This quarter',
           },
           {
-            label: 'Commission', value: canSeeCommission ? formatCurrency(totalComm) : '—',
+            label: 'Commission', value: formatCurrency(totalComm),
             icon: DollarSign, bg: 'rgba(167,139,250,0.1)', color: '#A78BFA',
-            sub: canSeeCommission ? 'Across all deals' : 'Restricted access',
-            show: true,
+            sub: 'Across all deals',
           },
-        ].map((kpi) => {
+        ] : [
+          {
+            label: 'My Projects', value: projects.length,
+            icon: FolderKanban, bg: 'rgba(96,165,250,0.1)', color: '#60A5FA',
+            sub: 'Assigned to you',
+          },
+          {
+            label: 'Active Deals', value: active,
+            icon: TrendingUp, bg: 'rgba(201,150,12,0.1)', color: '#F0B429',
+            sub: 'In pipeline',
+          },
+          {
+            label: 'Pending Queries', value: pendingQueries,
+            icon: AlertTriangle, bg: 'rgba(245,158,11,0.1)', color: '#F59E0B',
+            sub: 'Needs response',
+          },
+          {
+            label: 'Avg Doc Completion', value: `${docCompletion}%`,
+            icon: CheckCircle2, bg: 'rgba(34,197,94,0.1)', color: '#4ADE80',
+            sub: 'Across projects',
+          },
+        ]).map((kpi) => {
           const Icon = kpi.icon;
           return (
             <div className="stat-card" key={kpi.label}>
@@ -127,44 +159,86 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Charts ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
-        <div className="card">
-          <div className="card-header">
-            <div className="card-header-title">Deal Volume (₹ Cr)</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>Last 7 months</div>
+      <div style={{ display: 'grid', gridTemplateColumns: canViewFinance ? '2fr 1fr' : '1fr', gap: '16px', marginBottom: '1.5rem' }}>
+        {canViewFinance && (
+          <div className="card">
+            <div className="card-header">
+              <div className="card-header-title">Deal Volume (₹ Cr)</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>Last 7 months</div>
+            </div>
+            <div style={{ padding: '16px', height: '190px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={AREA_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#C9960C" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#C9960C" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="m" tick={{ fontSize: 10, fill: '#4E647F' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#4E647F' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: '#0D1B2E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '0.76rem', color: '#EEF2FF' }} />
+                  <Area type="monotone" dataKey="v" stroke="#C9960C" strokeWidth={2} fill="url(#gv)" dot={false} activeDot={{ r: 4, fill: '#F0B429' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={{ padding: '16px', height: '190px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={AREA_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#C9960C" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#C9960C" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="m" tick={{ fontSize: 10, fill: '#4E647F' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#4E647F' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: '#0D1B2E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '0.76rem', color: '#EEF2FF' }} />
-                <Area type="monotone" dataKey="v" stroke="#C9960C" strokeWidth={2} fill="url(#gv)" dot={false} activeDot={{ r: 4, fill: '#F0B429' }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        )}
 
         <div className="card">
           <div className="card-header">
             <div className="card-header-title">Pipeline Distribution</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{projects.length} total</div>
           </div>
-          <div style={{ padding: '16px', height: '190px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={BAR_DATA} layout="vertical" margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#4E647F' }} axisLine={false} tickLine={false} width={68} />
-                <Tooltip contentStyle={{ background: '#0D1B2E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '0.76rem', color: '#EEF2FF' }} />
-                <Bar dataKey="count" fill="#C9960C" radius={[0, 4, 4, 0]} maxBarSize={10} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {(() => {
+              const stageData = [
+                { id: 'lead_received',       label: 'Lead Received',   color: '#64748B', emoji: '📥' },
+                { id: 'meeting_done',        label: 'Meeting Done',    color: '#3B82F6', emoji: '🤝' },
+                { id: 'documents_requested', label: 'Docs Requested',  color: '#8B5CF6', emoji: '📋' },
+                { id: 'internal_processing', label: 'Processing',      color: '#F59E0B', emoji: '⚙️' },
+                { id: 'proposal_sent',       label: 'Proposal Sent',   color: '#06B6D4', emoji: '📤' },
+                { id: 'approved',            label: 'Approved',        color: '#22C55E', emoji: '✅' },
+              ];
+
+              const counts = stageData.map((s) => ({
+                ...s,
+                count: projects.filter((p) => p.stage === s.id).length,
+              }));
+              const maxCount = Math.max(...counts.map((c) => c.count), 1);
+
+              return counts.map((item) => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '100px', fontSize: '0.7rem', color: 'var(--text-2)', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    <span style={{ fontSize: '0.72rem' }}>{item.emoji}</span>
+                    {item.label}
+                  </div>
+                  <div style={{ flex: 1, height: '16px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                    {item.count > 0 && (
+                      <div style={{
+                        height: '100%',
+                        width: `${(item.count / maxCount) * 100}%`,
+                        background: `linear-gradient(90deg, ${item.color}, ${item.color}dd)`,
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease',
+                        minWidth: '12px',
+                      }} />
+                    )}
+                  </div>
+                  <div style={{
+                    fontSize: '0.72rem', fontWeight: 700, color: item.count > 0 ? item.color : 'var(--text-4)',
+                    width: '20px', textAlign: 'right', flexShrink: 0,
+                  }}>
+                    {item.count}
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       </div>
@@ -186,10 +260,10 @@ export default function DashboardPage() {
                   <tr>
                     <th>Company</th>
                     <th>Loan Type</th>
-                    <th>Amount</th>
+                    {canViewFinance && <th>Amount</th>}
                     <th>Stage</th>
                     <th style={{ textAlign: 'center' }}>Docs %</th>
-                    <th style={{ textAlign: 'center' }}>Score</th>
+                    {canViewFinance && <th style={{ textAlign: 'center' }}>Score</th>}
                     <th></th>
                   </tr>
                 </thead>
@@ -217,7 +291,7 @@ export default function DashboardPage() {
                           </div>
                         </td>
                         <td style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{getLoanTypeLabel(p.loan_type || '')}</td>
-                        <td className="td-gold">{formatCurrency(p.loan_amount || 0)}</td>
+                        {canViewFinance && <td className="td-gold">{formatCurrency(p.loan_amount || 0)}</td>}
                         <td><span className={getPillClass(p.stage)}>{getStageLabel(p.stage)}</span></td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
@@ -227,9 +301,11 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: sc.color }}>{score}</span>
-                        </td>
+                        {canViewFinance && (
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: sc.color }}>{score}</span>
+                          </td>
+                        )}
                         <td>
                           <Link href={`/dashboard/projects/${p.id}`} style={{ color: 'var(--text-3)', display: 'flex', justifyContent: 'center' }}>
                             <ExternalLink size={13} />

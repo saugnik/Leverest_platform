@@ -2,9 +2,10 @@
 
 import { useAuth } from '@/context/auth-context';
 import { MOCK_PROJECTS, getProjectsByUser, formatCurrency } from '@/lib/mock-data';
+import { canViewFinanceData } from '@/lib/utils';
 
 function getStageLabel(s: string) {
-  const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',internal_processing:'Processing',bank_connect:'Bank Connect',proposal_sent:'Proposal Sent',bank_document_stage:'Bank Docs',approved:'Approved' };
+  const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',internal_processing:'Processing',proposal_sent:'Proposal Sent',approved:'Approved' };
   return m[s] || s;
 }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -18,19 +19,20 @@ const COMMISSION_STATS = [
 
 export default function CommissionPage() {
   const { user } = useAuth();
-  const canSee = ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'].includes(user?.role || '');
+  const canSee = canViewFinanceData(user?.role);
 
   if (!canSee) {
     return (
       <div style={{ padding: '3rem', textAlign: 'center' }}>
         <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🔒</div>
-        <div style={{ color: 'var(--text-3)', fontSize: '0.88rem' }}>Commission data is restricted to Finance & Partners roles.</div>
+        <div style={{ color: 'var(--text-3)', fontSize: '0.88rem' }}>Commission data is restricted to Admin only.</div>
       </div>
     );
   }
 
   const projects = getProjectsByUser(user?.email || '', user?.role || '');
-  const dealProjects = projects.filter(p => p.commission_amount);
+  // ONLY show finished deals (approved) that have a commission amount as requested
+  const dealProjects = projects.filter(p => p.stage === 'approved' && p.commission_amount);
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -83,7 +85,7 @@ export default function CommissionPage() {
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{p.contact_person}</div>
                   </td>
                   <td style={{ fontSize: '0.75rem' }}>
-                    {{ working_capital:'Working Capital', term_loan:'Term Loan', od_cc:'OD / CC', project_finance:'Project Finance' }[p.loan_type || ''] || p.loan_type}
+                    {{ working_capital:'Working Capital', term_loan:'Term Loan', od_cc:'OD / CC', project_finance:'Project Finance', equipment_finance:'Equipment Finance', other:'Other' }[p.loan_type as string] || p.loan_type}
                   </td>
                   <td style={{ color: '#F0B429', fontWeight: 700 }}>{formatCurrency(p.loan_amount || 0)}</td>
                   <td style={{ fontSize: '0.8rem', fontWeight: 700 }}>{p.commission_percentage}%</td>

@@ -14,9 +14,7 @@ function getActionPill(action: string) {
   const m: Record<string,{label:string;color:string}> = {
     stage_updated:    { label:'Stage Updated',    color:'pill-blue' },
     document_uploaded:{ label:'Doc Uploaded',     color:'pill-green' },
-    bank_suggested:   { label:'Bank Suggested',   color:'pill-gold' },
     query_raised:     { label:'Query Raised',     color:'pill-red' },
-    bank_selected:    { label:'Bank Selected',    color:'pill-cyan' },
     note_added:       { label:'Note Added',       color:'pill-slate' },
     query_resolved:   { label:'Query Resolved',   color:'pill-emerald' },
   };
@@ -27,7 +25,7 @@ export default function ActivityLogPage() {
   const { user } = useAuth();
   const projects = getProjectsByUser(user?.email || '', user?.role || '');
   const projectIds = projects.map(p => p.id);
-  const allLogs = MOCK_ACTIVITY_LOGS.filter(l => projectIds.includes(l.project_id));
+  const allLogs = MOCK_ACTIVITY_LOGS.filter(l => projectIds.some(id => id === l.project_id));
   const [filterProject, setFilterProject] = useState('all');
 
   const filtered = filterProject === 'all' ? allLogs : allLogs.filter(l => l.project_id === filterProject);

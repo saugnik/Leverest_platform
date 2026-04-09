@@ -49,18 +49,19 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   // Operations
-  { href: '/dashboard',              label: 'Dashboard',      icon: LayoutDashboard, section: 'Operations' },
-  { href: '/dashboard/projects',     label: 'Projects',       icon: FolderKanban,    section: '', roles: ['admin','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','accounts','mis','engagement_assistant'] },
-  { href: '/dashboard/kanban',       label: 'Kanban Board',   icon: Columns2,        section: '' },
+  { href: '/dashboard',              label: 'Dashboard',      icon: LayoutDashboard, section: 'Operations', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/projects',     label: 'Projects',       icon: FolderKanban,    section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/kanban',       label: 'Kanban Board',   icon: Columns2,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
   // Deal management
-  { href: '/dashboard/documents',    label: 'Documents',      icon: FileText,        section: 'Deal Management' },
-  { href: '/dashboard/queries',      label: 'Queries',        icon: MessageSquare,   section: '' },
-  { href: '/dashboard/banks',        label: 'Bank Connect',   icon: Banknote,        section: '' },
+  { href: '/dashboard/documents',    label: 'Documents',      icon: FileText,        section: 'Deal Management', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/queries',      label: 'Queries',        icon: MessageSquare,   section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+
   // Finance
-  { href: '/dashboard/commission',   label: 'Commission',     icon: DollarSign,      section: 'Finance', roles: ['admin','accounts','relation_partner','relation_manager','engagement_partner','engagement_manager'] },
+  { href: '/dashboard/finance',      label: 'Finance & HR',   icon: Banknote,        section: 'Finance' }, // Everyone can see finance (Personal Salary log)
+  { href: '/dashboard/commission',   label: 'Commission',     icon: DollarSign,      section: '', roles: ['admin', 'accounts'] },
   // Admin
-  { href: '/dashboard/notes',        label: 'Internal Notes', icon: StickyNote,      section: 'Records' },
-  { href: '/dashboard/activity',     label: 'Activity Log',   icon: Activity,        section: '' },
+  { href: '/dashboard/notes',        label: 'Internal Notes', icon: StickyNote,      section: 'Records', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/activity',     label: 'Activity Log',   icon: Activity,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
   { href: '/dashboard/team',         label: 'Team',           icon: Users,           section: '', roles: ['admin','relation_partner','engagement_partner'] },
 ];
 
@@ -150,7 +151,8 @@ export default function Sidebar() {
             // Items belonging to this section
             let currentSec = '';
             for (let i = 0; i <= idx; i++) {
-              if (visibleNav[i].section) currentSec = visibleNav[i].section;
+              const s = visibleNav[i].section;
+              if (s) currentSec = s;
             }
             return currentSec === sec;
           });
