@@ -27,7 +27,6 @@ export const MOCK_USERS: User[] = [
   { id: 'u-barun', email: 'barun.thakur@leverestfin.com', name: 'Barun Kumar Thakur', role: 'relation_manager', branch: 'kolkata', designation: 'BD Manager', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
   { id: 'u-peu', email: 'peu.b@leverestfin.com', name: 'Peu Bhattacharyya', role: 'relation_manager', branch: 'kolkata', designation: 'BD Manager', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
   { id: 'u-nitin', email: 'nitin.parmar@leverestfin.com', name: 'Nitin Parmar', role: 'relation_manager', branch: 'kolkata', designation: 'BD Manager', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
-  { id: 'u-pari', email: 'marketing@leverestfin.com', name: 'Pari Jalan', role: 'executive', branch: 'kolkata', designation: 'Marketing Intern', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
   { id: 'u-mohitosh', email: 'mis@leverestfin.com', name: 'Mohitosh Singha', role: 'mis', branch: 'kolkata', designation: 'MIS', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
 ];
 

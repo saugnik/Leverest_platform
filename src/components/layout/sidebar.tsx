@@ -8,7 +8,7 @@ import { MOCK_NOTIFICATIONS } from '@/lib/mock-data';
 import {
   LayoutDashboard, FolderKanban, Columns2, FileText, MessageSquare,
   Banknote, DollarSign, StickyNote, Activity, Users, Bell, LogOut,
-  ChevronLeft, ChevronRight, Building2, Settings
+  ChevronLeft, ChevronRight, Building2, Settings, Brain
 } from 'lucide-react';
 
 function getInitials(name: string) {
@@ -50,18 +50,18 @@ type NavItem = {
 const NAV: NavItem[] = [
   // Operations
   { href: '/dashboard',              label: 'Dashboard',      icon: LayoutDashboard, section: 'Operations', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
-  { href: '/dashboard/projects',     label: 'Projects',       icon: FolderKanban,    section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
-  { href: '/dashboard/kanban',       label: 'Kanban Board',   icon: Columns2,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/projects',     label: 'Projects',       icon: FolderKanban,    section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
+  { href: '/dashboard/kanban',       label: 'Kanban Board',   icon: Columns2,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
   // Deal management
-  { href: '/dashboard/documents',    label: 'Documents',      icon: FileText,        section: 'Deal Management', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
-  { href: '/dashboard/queries',      label: 'Queries',        icon: MessageSquare,   section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/documents',    label: 'Documents',      icon: FileText,        section: 'Deal Management', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
+  { href: '/dashboard/queries',      label: 'Queries',        icon: MessageSquare,   section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
 
   // Finance
-  { href: '/dashboard/finance',      label: 'Finance & HR',   icon: Banknote,        section: 'Finance' }, // Everyone can see finance (Personal Salary log)
+  { href: '/dashboard/finance',      label: 'Finance & HR',   icon: Banknote,        section: 'Finance', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','accounts','engagement_assistant'] },
   { href: '/dashboard/commission',   label: 'Commission',     icon: DollarSign,      section: '', roles: ['admin', 'accounts'] },
   // Admin
-  { href: '/dashboard/notes',        label: 'Internal Notes', icon: StickyNote,      section: 'Records', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
-  { href: '/dashboard/activity',     label: 'Activity Log',   icon: Activity,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/notes',        label: 'Internal Notes', icon: StickyNote,      section: 'Records', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
+  { href: '/dashboard/activity',     label: 'Activity Log',   icon: Activity,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
   { href: '/dashboard/team',         label: 'Team',           icon: Users,           section: '', roles: ['admin','relation_partner','engagement_partner'] },
 ];
 

@@ -11,7 +11,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, FileText, MessageSquare, StickyNote, Activity,
   CheckCircle2, Clock, AlertCircle, Upload, ExternalLink, Plus, Send,
-  Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock,
+  Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock, Brain,
 } from 'lucide-react';
 
 type Tab = 'overview' | 'documents' | 'queries' | 'notes' | 'activity';
@@ -107,9 +107,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '5px' }}>{project.description}</div>
         </div>
-        <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <Edit3 size={13} /> Edit
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link href={`/dashboard/projects/${id}/assistant`} className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'linear-gradient(135deg, rgba(201,150,12,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(201,150,12,0.25)', color: '#F0B429', textDecoration: 'none' }}>
+            <Brain size={13} /> AI Assistant
+          </Link>
+          <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Edit3 size={13} /> Edit
+          </button>
+        </div>
       </div>
 
       {/* Pipeline */}

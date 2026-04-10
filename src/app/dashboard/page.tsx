@@ -9,11 +9,15 @@ import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
-import { TrendingUp, FolderKanban, CheckCircle2, DollarSign, AlertTriangle, ChevronRight, Clock, ExternalLink } from 'lucide-react';
+import { TrendingUp, FolderKanban, CheckCircle2, DollarSign, AlertTriangle, ChevronRight, Clock, ExternalLink, Calendar, Users, Plane, Briefcase, X, Plus, Trash2, Edit3 } from 'lucide-react';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -55,6 +59,486 @@ function greeting() {
   return 'Good evening';
 }
 
+
+// ─── Modal Overlay ──────────────────────────────────────────────────────────
+function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--bg-border)',
+        borderRadius: '12px', width: '420px', maxHeight: '90vh', overflow: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const INPUT_STYLE: React.CSSProperties = {
+  width: '100%', padding: '8px 10px', background: 'rgba(255,255,255,0.04)',
+  border: '1px solid var(--bg-border)', borderRadius: '6px',
+  color: 'var(--text-1)', fontSize: '0.8rem', outline: 'none',
+};
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px', display: 'block',
+};
+const STATUS_OPTIONS = ['Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'] as const;
+const STATUS_COLORS: Record<string, string> = {
+  Screening: '#60A5FA', Interviewing: '#FCD34D', Offered: '#A78BFA', Hired: '#4ADE80', Rejected: '#F87171',
+};
+
+type Candidate = { id: string; name: string; role: string; status: string; addedAt: string };
+type CalEvent = { id: string; title: string; start: string; end: string; backgroundColor: string };
+
+// ─── EA Dashboard Component ─────────────────────────────────────────────────
+function EADashboard({ user, projects, router }: { user: any; projects: any[]; router: any }) {
+  const stuckProjects = projects.filter((p: any) => ['documents_requested', 'internal_processing'].includes(p.stage));
+
+  // ── Candidates state ──
+  const [candidates, setCandidates] = useState<Candidate[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ea_candidates');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+  const [showAddCandidate, setShowAddCandidate] = useState(false);
+  const [newCandidate, setNewCandidate] = useState({ name: '', role: '', status: 'Screening' });
+
+  // ── Calendar events state ──
+  const [calEvents, setCalEvents] = useState<CalEvent[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ea_cal_events');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [newEvent, setNewEvent] = useState({ title: '', date: '', startTime: '10:00', endTime: '11:00', person: '' });
+
+  // ── Notes state ──
+  const [notes, setNotes] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ea_travel_notes') || '';
+    }
+    return '';
+  });
+
+  // Persist to localStorage
+  useEffect(() => { localStorage.setItem('ea_candidates', JSON.stringify(candidates)); }, [candidates]);
+  useEffect(() => { localStorage.setItem('ea_cal_events', JSON.stringify(calEvents)); }, [calEvents]);
+
+  function addCandidate() {
+    if (!newCandidate.name || !newCandidate.role) return;
+    setCandidates(prev => [...prev, {
+      id: Date.now().toString(), name: newCandidate.name,
+      role: newCandidate.role, status: newCandidate.status,
+      addedAt: new Date().toISOString(),
+    }]);
+    setNewCandidate({ name: '', role: '', status: 'Screening' });
+    setShowAddCandidate(false);
+  }
+
+  function removeCandidate(id: string) {
+    setCandidates(prev => prev.filter(c => c.id !== id));
+  }
+
+  function cycleStatus(id: string) {
+    setCandidates(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const idx = STATUS_OPTIONS.indexOf(c.status as any);
+      const next = STATUS_OPTIONS[(idx + 1) % STATUS_OPTIONS.length];
+      return { ...c, status: next };
+    }));
+  }
+
+  function addEvent() {
+    if (!newEvent.title || !newEvent.date) return;
+    const color = ['#3B82F6', '#F59E0B', '#8B5CF6', '#22C55E', '#EC4899'][calEvents.length % 5];
+    setCalEvents(prev => [...prev, {
+      id: Date.now().toString(),
+      title: newEvent.person ? `${newEvent.title} - ${newEvent.person}` : newEvent.title,
+      start: `${newEvent.date}T${newEvent.startTime}:00`,
+      end: `${newEvent.date}T${newEvent.endTime}:00`,
+      backgroundColor: color,
+    }]);
+    setNewEvent({ title: '', date: '', startTime: '10:00', endTime: '11:00', person: '' });
+    setShowSchedule(false);
+  }
+
+  function removeEvent(id: string) {
+    setCalEvents(prev => prev.filter(e => e.id !== id));
+  }
+
+  function saveNotes(val: string) {
+    setNotes(val);
+    localStorage.setItem('ea_travel_notes', val);
+  }
+
+  return (
+    <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
+      {/* ── Header ── */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>
+          {greeting()}, <span style={{ color: 'var(--gold-light)' }}>{user?.name?.split(' ')[0]}</span>
+        </div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '3px' }}>
+          Executive Assistant Dashboard · {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px' }}>
+        {/* Main Column: Calendar & Logistics */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar size={16} color="var(--gold)" />
+                <div className="card-header-title">Team Appointments & Schedule</div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setShowSchedule(true)}
+                  style={{
+                    background: 'var(--gold)', color: '#000', border: 'none',
+                    padding: '4px 12px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                  }}
+                >
+                  <Plus size={12} /> Schedule
+                </button>
+              </div>
+            </div>
+            <div style={{ padding: '16px', height: '380px' }}>
+              <style>{`
+                .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid { border-color: rgba(255,255,255,0.1); }
+                .fc { color: var(--text-2); font-size: 0.8rem; }
+                .fc-toolbar-title { font-size: 1.1rem !important; color: var(--text-1); font-family: var(--font-playfair); }
+                .fc-button-primary { background-color: var(--bg-card-hover) !important; border-color: var(--bg-border) !important; color: var(--text-1) !important; }
+                .fc-button-active { background-color: var(--gold) !important; color: #000 !important; border-color: var(--gold) !important; }
+              `}</style>
+              <FullCalendar
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                }}
+                height="100%"
+                slotMinTime="08:00:00"
+                slotMaxTime="20:00:00"
+                events={calEvents}
+                eventClick={(info) => {
+                  if (confirm(`Delete "${info.event.title}"?`)) {
+                    const id = calEvents.find(e => e.title === info.event.title && e.start === info.event.startStr)?.id;
+                    if (id) removeEvent(id);
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plane size={16} color="var(--gold)" />
+                <div className="card-header-title">Travel & Logistics Notes</div>
+              </div>
+            </div>
+            <div style={{ padding: '16px' }}>
+              <textarea
+                style={{
+                  width: '100%', minHeight: '120px', background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--bg-border)', borderRadius: '6px', padding: '10px',
+                  color: 'var(--text-1)', fontSize: '0.8rem', resize: 'vertical', outline: 'none',
+                }}
+                placeholder="Log flights, hotel bookings, specific follow-up times here..."
+                value={notes}
+                onChange={(e) => saveNotes(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Follow-ups + Hiring */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={16} color="#F87171" />
+                <div className="card-header-title">Requires Follow Up</div>
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>Stuck Projects</div>
+            </div>
+            <div style={{ padding: '0' }}>
+              {stuckProjects.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                  No pending follow-ups.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {stuckProjects.map((p: any) => {
+                    const comp = getProjectDocCompletionPercent(p.id);
+                    return (
+                      <div key={p.id} style={{
+                        padding: '12px 16px', borderBottom: '1px solid var(--bg-border)',
+                        display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer'
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => router.push(`/dashboard/projects/${p.id}`)}
+                      >
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '6px',
+                          background: getGrad(p.company_name),
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0
+                        }}>
+                          {getInitials(p.company_name)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.company_name}
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: '#F87171', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Clock size={10} /> Stuck in: {getStageLabel(p.stage)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FCD34D' }}>{comp}%</div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-4)' }}>Docs</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={16} color="#60A5FA" />
+                <div className="card-header-title">Recent Client Activity</div>
+              </div>
+            </div>
+            <div>
+              {MOCK_ACTIVITY_LOGS.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                  No recent activity.
+                </div>
+              ) : (
+                MOCK_ACTIVITY_LOGS.slice(0, 4).map((log, i) => {
+                  const isLast = i === Math.min(MOCK_ACTIVITY_LOGS.length, 4) - 1;
+                  return (
+                    <div key={log.id} style={{
+                      display: 'flex', gap: '10px', padding: '10px 16px',
+                      borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', lineHeight: 1.4 }}>{log.description}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{log.performed_by_name}</span>
+                          <span style={{ color: 'var(--text-4)', fontSize: '0.65rem' }}>·</span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-4)' }}>
+                            {new Date(log.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ── Hiring Pipeline ── */}
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={16} color="#A78BFA" />
+                <div className="card-header-title">Hiring Pipeline</div>
+              </div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', background: 'rgba(255,255,255,0.04)', padding: '3px 8px', borderRadius: '99px' }}>
+                {candidates.length}
+              </div>
+            </div>
+            <div style={{ padding: '0' }}>
+              {candidates.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                  No candidates currently in the pipeline.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {candidates.map((c) => (
+                    <div key={c.id} style={{
+                      padding: '10px 16px', borderBottom: '1px solid var(--bg-border)',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-1)' }}>{c.name}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{c.role}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          onClick={() => cycleStatus(c.id)}
+                          title="Click to change status"
+                          style={{
+                            fontSize: '0.65rem', fontWeight: 700,
+                            color: STATUS_COLORS[c.status] || '#94A3B8',
+                            background: `${STATUS_COLORS[c.status] || '#94A3B8'}15`,
+                            padding: '3px 8px', borderRadius: '4px',
+                            border: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          {c.status}
+                        </button>
+                        <button
+                          onClick={() => removeCandidate(c.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: '2px' }}
+                          title="Remove candidate"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setShowAddCandidate(true)}
+                style={{
+                  width: '100%', background: 'transparent', border: 'none', borderTop: '1px solid var(--bg-border)',
+                  padding: '10px', color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                }}
+              >
+                <Plus size={12} /> Add Candidate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Add Candidate Modal ── */}
+      {showAddCandidate && (
+        <ModalOverlay onClose={() => setShowAddCandidate(false)}>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                Add Candidate
+              </div>
+              <button onClick={() => setShowAddCandidate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: '4px' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={LABEL_STYLE}>Candidate Name</label>
+                <input style={INPUT_STYLE} placeholder="e.g. Anjali Mehra"
+                  value={newCandidate.name} onChange={e => setNewCandidate(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Position / Role</label>
+                <input style={INPUT_STYLE} placeholder="e.g. Credit Analyst"
+                  value={newCandidate.role} onChange={e => setNewCandidate(p => ({ ...p, role: e.target.value }))} />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Status</label>
+                <select style={{ ...INPUT_STYLE }} value={newCandidate.status}
+                  onChange={e => setNewCandidate(p => ({ ...p, status: e.target.value }))}>
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={addCandidate}
+                disabled={!newCandidate.name || !newCandidate.role}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '6px', border: 'none',
+                  background: (!newCandidate.name || !newCandidate.role) ? 'rgba(255,255,255,0.05)' : 'var(--gold)',
+                  color: (!newCandidate.name || !newCandidate.role) ? 'var(--text-4)' : '#000',
+                  fontWeight: 700, fontSize: '0.82rem', cursor: (!newCandidate.name || !newCandidate.role) ? 'not-allowed' : 'pointer',
+                  marginTop: '4px',
+                }}
+              >
+                Add Candidate
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ── Schedule Meeting Modal ── */}
+      {showSchedule && (
+        <ModalOverlay onClose={() => setShowSchedule(false)}>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                Schedule Meeting
+              </div>
+              <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: '4px' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={LABEL_STYLE}>Meeting Title</label>
+                <input style={INPUT_STYLE} placeholder="e.g. Client Meeting"
+                  value={newEvent.title} onChange={e => setNewEvent(p => ({ ...p, title: e.target.value }))} />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Person / Assignee</label>
+                <input style={INPUT_STYLE} placeholder="e.g. Pawan Lohia"
+                  value={newEvent.person} onChange={e => setNewEvent(p => ({ ...p, person: e.target.value }))} />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Date</label>
+                <input type="date" style={INPUT_STYLE}
+                  value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={LABEL_STYLE}>Start Time</label>
+                  <input type="time" style={INPUT_STYLE}
+                    value={newEvent.startTime} onChange={e => setNewEvent(p => ({ ...p, startTime: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={LABEL_STYLE}>End Time</label>
+                  <input type="time" style={INPUT_STYLE}
+                    value={newEvent.endTime} onChange={e => setNewEvent(p => ({ ...p, endTime: e.target.value }))} />
+                </div>
+              </div>
+              <button
+                onClick={addEvent}
+                disabled={!newEvent.title || !newEvent.date}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '6px', border: 'none',
+                  background: (!newEvent.title || !newEvent.date) ? 'rgba(255,255,255,0.05)' : 'var(--gold)',
+                  color: (!newEvent.title || !newEvent.date) ? 'var(--text-4)' : '#000',
+                  fontWeight: 700, fontSize: '0.82rem', cursor: (!newEvent.title || !newEvent.date) ? 'not-allowed' : 'pointer',
+                  marginTop: '4px',
+                }}
+              >
+                Add to Calendar
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -70,6 +554,10 @@ export default function DashboardPage() {
 
   if (user?.role === 'accounts') {
     return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Redirecting to Finance view...</div>;
+  }
+
+  if (user?.role === 'engagement_assistant') {
+    return <EADashboard user={user} projects={projects} router={router} />;
   }
 
   const totalLoan      = projects.reduce((s, p) => s + (p.loan_amount || 0), 0);
