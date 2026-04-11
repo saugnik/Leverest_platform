@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { requireAuth } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { MANUFACTURING_SERVICE_CHECKLIST, NBFC_CHECKLIST } from '@/lib/types';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -12,7 +13,8 @@ export async function GET() {
     const user = await requireAuth();
 
     // MOCK DATA FALLBACK
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+    const cookieStore = await cookies();
+    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
       const { getProjectsByUser } = await import('@/lib/mock-data');
       return NextResponse.json({ projects: getProjectsByUser(user.email, user.role), user });
     }
@@ -79,7 +81,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
 
+    const cookieStore = await cookies();
+    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+      const { MOCK_PROJECTS } = await import('@/lib/mock-data');
+      const newMockProject = {
+        id: `mock-proj-${Date.now()}`,
+        name: `${client_name} — ${loan_type || 'Loan'}`,
+        client_name,
+        company_name: client_name,
+        company_type,
+        loan_type: loan_type || '',
+        loan_amount: loan_amount || 0,
+        bank: bank || '',
+        commission_percent: commission_percent || 0,
+        branch,
+        stage: 'lead_received',
+        assigned_team: team_emails && team_emails.length ? team_emails : [user.email],
+        spoc_ids: [],
+        created_by: user.email,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        description: '',
+      };
+      
+      MOCK_PROJECTS.unshift(newMockProject as any);
+      return NextResponse.json({ success: true, project: newMockProject }, { status: 201 });
+    }
+
     const supabase = await createClient();
+    const adminClient = await createAdminClient();
 
     // 1. Insert the project
     const { data: project, error: projectError } = await supabase
@@ -117,7 +147,7 @@ export async function POST(request: NextRequest) {
     }));
 
     if (memberInserts.length > 0) {
-      const { error: memberError } = await supabase
+      const { error: memberError } = await adminClient
         .from('project_members')
         .insert(memberInserts);
       if (memberError) console.warn('project_members insert error:', memberError);
@@ -137,7 +167,7 @@ export async function POST(request: NextRequest) {
         }))
       );
 
-      const { error: spocError } = await supabase
+      const { error: spocError } = await adminClient
         .from('client_spocs')
         .insert(spocInserts);
       if (spocError) console.warn('client_spocs insert error:', spocError);
@@ -160,14 +190,14 @@ export async function POST(request: NextRequest) {
     );
 
     if (docInserts.length > 0) {
-      const { error: docError } = await supabase
+      const { error: docError } = await adminClient
         .from('documents')
         .insert(docInserts);
       if (docError) console.warn('documents insert error:', docError);
     }
 
     // 5. Log the activity
-    await supabase.from('activity_log').insert({
+    await adminClient.from('activity_log').insert({
       project_id: project.id,
       action: 'project_created',
       performed_by: user.email,

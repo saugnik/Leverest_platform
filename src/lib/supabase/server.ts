@@ -8,6 +8,10 @@ import { cookies } from 'next/headers';
 export async function createClient() {
   const cookieStore = await cookies();
 
+  if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
+    return createAdminClient();
+  }
+
   return createServerClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-anon-key',

@@ -36,7 +36,26 @@ export const MOCK_SPOCS: ClientSPOC[] = [];
 
 // ─── MOCK PROJECTS ──────────────────────────────────────────────────────────────
 
-export const MOCK_PROJECTS: Project[] = [];
+export const MOCK_PROJECTS: Project[] = [
+  {
+    id: "mock-seed-project",
+    name: "Leverest AI Validation Test — Working Capital",
+    client_name: "Leverest AI Validation Test",
+    company_name: "Leverest AI Validation Test",
+    company_type: "manufacturing_service",
+    branch: "kolkata",
+    stage: "lead_received",
+    lead_source: "direct",
+    loan_type: "working_capital",
+    loan_amount: 50000000,
+    assigned_team: ["pawan.lohia@leverestfin.com", "contact@leverestfin.com"],
+    spoc_ids: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by: "pawan.lohia@leverestfin.com",
+    description: "A permanent test project for AI validation."
+  }
+];
 
 // ─── MOCK DOCUMENTS ─────────────────────────────────────────────────────────────
 
@@ -66,7 +85,7 @@ function generateDocuments(projectId: string, companyType: 'manufacturing_servic
   return docs;
 }
 
-export const MOCK_DOCUMENTS: DocumentItem[] = [];
+export const MOCK_DOCUMENTS: DocumentItem[] = generateDocuments("mock-seed-project", "manufacturing_service");
 
 // ─── MOCK QUERIES ───────────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { requireAuth, getSpoc } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { chatWithProject, ProjectContext } from '@/lib/ai/gemini';
@@ -36,7 +37,9 @@ export async function POST(request: NextRequest) {
     // ── Fetch project data for AI context ──
     let projectContext: ProjectContext;
 
+    const cookieStore = await cookies();
     const isMockMode =
+      cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' ||
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') ||
       process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');

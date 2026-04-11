@@ -79,32 +79,39 @@ export default function NewProjectPage() {
 
   async function handleSave() {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 500));
-    const id = `p-${Date.now()}`;
-    const now = new Date().toISOString();
-    const project = {
-      id,
-      name: `${form.company_name} — ${LOAN_TYPES.find(l => l.value === form.loan_type)?.label || 'Loan'}`,
-      company_name: form.company_name,
-      company_type: (form.company_type as any) || 'manufacturing_service',
-      branch: 'kolkata' as const,
-      stage: (form.stage as any) || 'lead_received',
-      lead_source: (form.lead_source as any) || 'direct',
-      loan_type: (form.loan_type as any) || 'working_capital',
-      loan_amount: Number(form.loan_amount || 0),
-      assigned_team: form.team.length ? form.team : [user?.email || ''],
-      spoc_ids: [],
-      created_at: now,
-      updated_at: now,
-      created_by: user?.email || '',
-      description: form.description,
-      deadline: form.deadline,
-    };
-    saveDynamicProject(project);
-    const token = createInviteToken(id, 72);
-    setSaving(false);
-    alert(`Invite link created:\n${window.location.origin}/client/invite/${token}\n\nShare with client to add members.`);
-    router.push('/dashboard/projects');
+    try {
+      const payload = {
+        client_name: form.company_name,
+        company_type: form.company_type || 'manufacturing_service',
+        loan_type: form.loan_type || 'working_capital',
+        loan_amount: Number(form.loan_amount || 0),
+        lead_source: form.lead_source || 'direct',
+        bank: '',
+        commission_percent: Number(form.commission_percentage || 0),
+        branch: 'kolkata',
+        team_emails: form.team.length ? form.team : [user?.email || ''],
+        spocs: []
+      };
+
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to create project on server');
+      }
+
+      await res.json();
+      router.push('/dashboard/projects');
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Error saving project.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const isValid = form.company_name && form.loan_type && form.loan_amount;

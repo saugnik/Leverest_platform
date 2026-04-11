@@ -12,6 +12,7 @@ import {
   ArrowLeft, FileText, MessageSquare, StickyNote, Activity,
   CheckCircle2, Clock, AlertCircle, Upload, ExternalLink, Plus, Send,
   Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock, Brain,
+  FolderDown,
 } from 'lucide-react';
 
 type Tab = 'overview' | 'documents' | 'queries' | 'notes' | 'activity';
@@ -51,6 +52,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [newNote, setNewNote] = useState('');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Drive Import State
+  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleDriveImport = async () => {
+    if (!driveLink) return;
+    setIsImporting(true);
+    try {
+      const res = await fetch(`/api/documents/drive-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: id, drive_link: driveLink })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Items processed successfully!');
+        window.location.reload();
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error connecting to AI Sorter.');
+    } finally {
+      setIsImporting(false);
+      setShowDriveModal(false);
+      setDriveLink('');
+    }
+  };
 
   useEffect(() => {
     fetch(`/api/projects/${id}`)
@@ -360,9 +392,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <div className="card">
             <div className="card-header">
               <div className="card-header-title">Document Checklist — {docs.length} Total</div>
-              <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Upload size={12} /> Upload
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowDriveModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(59,130,246,0.1)', color: '#3B82F6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  <FolderDown size={12} /> Import from Drive
+                </button>
+                <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Upload size={12} /> Upload
+                </button>
+              </div>
             </div>
             <div className="tbl-wrap">
               <table className="tbl">
@@ -513,6 +550,32 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </div>
+
+      {/* Drive Import Modal */}
+      {showDriveModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '400px', padding: '24px' }}>
+            <h3 style={{ marginBottom: '10px', fontSize: '1.2rem', fontFamily: 'var(--font-playfair)', color: 'var(--text-1)' }}>Import Google Drive Folder</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-3)', marginBottom: '20px', lineHeight: 1.5 }}>
+              Paste a public Google Drive folder link. Our AI will automatically scan the documents, categorize them, and place them in the correct checklist slots.
+            </p>
+            <input 
+              type="text" 
+              placeholder="https://drive.google.com/drive/folders/..." 
+              className="field" 
+              value={driveLink}
+              onChange={e => setDriveLink(e.target.value)}
+              style={{ marginBottom: '20px' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn btn-ghost" onClick={() => setShowDriveModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleDriveImport} disabled={isImporting || !driveLink}>
+                {isImporting ? 'Scanning with AI...' : 'Start Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

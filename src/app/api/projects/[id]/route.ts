@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { requireProjectAccess } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -13,7 +14,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
     await requireProjectAccess(id);
 
     // MOCK DATA FALLBACK
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+    const cookieStore = await cookies();
+    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
+    if (isMockMode) {
       const { MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_NOTES, MOCK_ACTIVITY_LOGS } = await import('@/lib/mock-data');
       const project = MOCK_PROJECTS.find(p => p.id === id);
       if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });

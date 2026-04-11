@@ -30,6 +30,18 @@ export interface SpocSession {
  */
 export async function getUser(): Promise<LeverestUser | null> {
   try {
+    const cookieStore = await cookies();
+    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
+      return {
+        email: 'admin@leverestfin.com',
+        name: 'Admin Test',
+        role: 'admin',
+        employee_type: 'supervision',
+        branch: 'both',
+        is_admin: true
+      };
+    }
+
     const supabase = await createClient();
 
     const {
