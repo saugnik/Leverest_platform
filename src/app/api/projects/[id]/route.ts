@@ -22,7 +22,11 @@ export async function GET(_request: NextRequest, { params }: Params) {
       if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
       return NextResponse.json({
         project,
-        members: [{ user_email: 'admin@leverestfin.com', assigned_at: new Date().toISOString(), assigned_by: 'admin@leverestfin.com' }],
+        members: project.assigned_team ? project.assigned_team.map(email => ({
+          user_email: email,
+          assigned_at: new Date().toISOString(),
+          assigned_by: 'admin@leverestfin.com'
+        })) : [{ user_email: 'admin@leverestfin.com', assigned_at: new Date().toISOString(), assigned_by: 'admin@leverestfin.com' }],
         spocs: [{ id: 'spoc-1', name: 'John Doe', email: 'spoc@client.com', phone: '', designation: '', created_at: new Date().toISOString() }],
         documents: MOCK_DOCUMENTS.filter(d => d.project_id === id),
         queries: MOCK_QUERIES.filter(q => q.project_id === id),
@@ -85,19 +89,56 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (field in body) updates[field] = body[field];
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && (!body.new_members || body.new_members.length === 0)) {
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('projects')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    // MOCK DATA FALLBACK
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
+    
+    if (isMockMode) {
+      // Mutate the mock data in memory so the new login session will see it
+      const { MOCK_PROJECTS } = await import('@/lib/mock-data');
+      const projectIdx = MOCK_PROJECTS.findIndex(p => p.id === id);
+      if (projectIdx > -1 && body.new_members) {
+        MOCK_PROJECTS[projectIdx].assigned_team.push(...body.new_members);
+      }
+      return NextResponse.json({ success: true, project: { id, ...updates } });
+    }
 
-    if (error) throw error;
+    const supabase = await createClient();
+    let data = null;
+
+    if (Object.keys(updates).length > 0) {
+      const { data: updateData, error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      data = updateData;
+    }
+
+    // Add new members if provided
+    if (body.new_members && Array.isArray(body.new_members)) {
+      for (const memberEmail of body.new_members) {
+        await supabase.from('project_members').insert({
+          project_id: id,
+          user_email: memberEmail,
+          assigned_by: user.email,
+        });
+      }
+      
+      await supabase.from('activity_log').insert({
+        project_id: id,
+        action: 'members_added',
+        performed_by: user.email,
+        details: { new_members: body.new_members },
+      });
+    }
 
     // Log the activity
     await supabase.from('activity_log').insert({

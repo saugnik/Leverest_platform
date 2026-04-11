@@ -8,14 +8,15 @@ import {
 import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
+import FMSTimeline from '@/components/project/fms-timeline';
 import {
   ArrowLeft, FileText, MessageSquare, StickyNote, Activity,
   CheckCircle2, Clock, AlertCircle, Upload, ExternalLink, Plus, Send,
   Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock, Brain,
-  FolderDown,
+  FolderDown, Flag, X, Save, Users,
 } from 'lucide-react';
 
-type Tab = 'overview' | 'documents' | 'queries' | 'notes' | 'activity';
+type Tab = 'overview' | 'timeline' | 'documents' | 'queries' | 'notes' | 'activity';
 
 function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
 function getGrad(name: string) {
@@ -57,6 +58,72 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [showDriveModal, setShowDriveModal] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+
+  // Edit Project State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({ client_name: '', loan_type: '', loan_amount: 0, stage: '', commission_percent: 0 });
+  const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [memberInput, setMemberInput] = useState('');
+  const [companyUsers, setCompanyUsers] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const openEditModal = async () => {
+    if (!data?.project) return;
+    const p = data.project;
+    setEditForm({
+      client_name: p.client_name || '',
+      loan_type: p.loan_type || '',
+      loan_amount: p.loan_amount || 0,
+      stage: p.stage || '',
+      commission_percent: p.commission_percent || 0,
+    });
+    setNewMembers([]);
+    setMemberInput('');
+    setShowEditModal(true);
+
+    try {
+      const res = await fetch('/api/team');
+      const d = await res.json();
+      if (d.members) setCompanyUsers(d.members);
+    } catch(e) {
+      console.error('Failed to load company users', e);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...editForm, new_members: newMembers }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        // Update UI optimistically without reloading (so Mock Mode doesn't reset)
+        setData((prev: any) => {
+          const addedMembers = newMembers.map(email => ({
+            user_email: email,
+            assigned_at: new Date().toISOString(),
+            assigned_by: prev?.user?.email || 'admin@leverestfin.com'
+          }));
+          return {
+            ...prev,
+            project: { ...prev.project, ...editForm },
+            members: [...(prev.members || []), ...addedMembers]
+          };
+        });
+        setShowEditModal(false);
+      } else {
+        alert('Failed to save: ' + (result.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error saving project.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDriveImport = async () => {
     if (!driveLink) return;
@@ -111,6 +178,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const TABS: { id: Tab; label: string; icon: React.ElementType; count?: number }[] = [
     { id: 'overview',       label: 'Overview',      icon: TrendingUp },
+    { id: 'timeline',       label: 'Timeline',      icon: Flag },
     { id: 'documents',      label: 'Documents',     icon: FileText,       count: docs.length },
     { id: 'queries',        label: 'Queries',       icon: MessageSquare,  count: queries.filter((q: any) => q.status !== 'resolved').length },
     { id: 'notes',          label: 'Internal Notes',icon: StickyNote,     count: notes.length },
@@ -143,7 +211,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <Link href={`/dashboard/projects/${id}/assistant`} className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'linear-gradient(135deg, rgba(201,150,12,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(201,150,12,0.25)', color: '#F0B429', textDecoration: 'none' }}>
             <Brain size={13} /> AI Assistant
           </Link>
-          <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <button className="btn btn-ghost btn-sm" onClick={openEditModal} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Edit3 size={13} /> Edit
           </button>
         </div>
@@ -549,6 +617,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         )}
+
+        {/* ── Timeline Tab ── */}
+        {activeTab === 'timeline' && (
+          <FMSTimeline projectId={id} members={members} currentUserEmail={user?.email || 'admin@leverestfin.com'} />
+        )}
       </div>
 
       {/* Drive Import Modal */}
@@ -571,6 +644,173 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <button className="btn btn-ghost" onClick={() => setShowDriveModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleDriveImport} disabled={isImporting || !driveLink}>
                 {isImporting ? 'Scanning with AI...' : 'Start Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {showEditModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditModal(false)}>
+          <div className="card" style={{ width: '480px', padding: '0', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(201,150,12,0.1)', border: '1px solid rgba(201,150,12,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Edit3 size={16} color="#F0B429" />
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>Edit Project</div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>Update project details</div>
+                </div>
+              </div>
+              <button onClick={() => setShowEditModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: '4px', display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Client Name */}
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Client Name</label>
+                <input
+                  type="text"
+                  className="field"
+                  value={editForm.client_name}
+                  onChange={e => setEditForm(f => ({ ...f, client_name: e.target.value }))}
+                />
+              </div>
+
+              {/* Stage */}
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Pipeline Stage</label>
+                <select
+                  className="field"
+                  value={editForm.stage}
+                  onChange={e => setEditForm(f => ({ ...f, stage: e.target.value }))}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {PIPELINE_STAGES.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Loan Type & Amount Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Loan Type</label>
+                  <input
+                    type="text"
+                    className="field"
+                    value={editForm.loan_type}
+                    onChange={e => setEditForm(f => ({ ...f, loan_type: e.target.value }))}
+                    placeholder="Term Loan, CC, OD..."
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Loan Amount (₹)</label>
+                  <input
+                    type="number"
+                    className="field"
+                    value={editForm.loan_amount}
+                    onChange={e => setEditForm(f => ({ ...f, loan_amount: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              {/* Commission */}
+              {canSeeCommission && (
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Commission (%)</label>
+                  <input
+                    type="number"
+                    className="field"
+                    step="0.01"
+                    value={editForm.commission_percent}
+                    onChange={e => setEditForm(f => ({ ...f, commission_percent: Number(e.target.value) }))}
+                  />
+                </div>
+              )}
+
+              {/* Team Members Assignment */}
+              <div style={{ marginTop: '10px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={12} color="var(--text-3)" /> Assign Team Members</label>
+                
+                {/* Existing Members */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                  {members.map((m: any, i: number) => (
+                    <span key={i} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-3)' }}>
+                      {m.user_email}
+                    </span>
+                  ))}
+                  {newMembers.map((m, i) => (
+                    <span key={`new-${i}`} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#60A5FA', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {m}
+                      <button onClick={() => setNewMembers(prev => prev.filter(x => x !== m))} style={{ background: 'none', border: 'none', color: '#60A5FA', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={10} /></button>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Add new member input (Combobox) */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="email"
+                    list="company-users"
+                    className="field"
+                    placeholder="employee@leverestfin.com"
+                    value={memberInput}
+                    onChange={e => setMemberInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (memberInput && memberInput.includes('@')) {
+                          setNewMembers(prev => Array.from(new Set([...prev, memberInput.trim()])));
+                          setMemberInput('');
+                        }
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                  <datalist id="company-users">
+                    {companyUsers
+                      .filter(user => user.email?.endsWith('@leverestfin.com'))
+                      .filter(user => !members.find((m: any) => m.user_email === user.email))
+                      .filter(user => !newMembers.includes(user.email))
+                      .map(user => (
+                        <option key={user.id} value={user.email}>{user.name}</option>
+                    ))}
+                  </datalist>
+                  <button 
+                    className="btn btn-secondary" 
+                    type="button"
+                    disabled={!memberInput || !memberInput.includes('@')}
+                    onClick={() => {
+                      if (memberInput && memberInput.includes('@')) {
+                        setNewMembers(prev => Array.from(new Set([...prev, memberInput.trim()])));
+                        setMemberInput('');
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--bg-border)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn btn-ghost" onClick={() => setShowEditModal(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Save size={14} />
+                {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

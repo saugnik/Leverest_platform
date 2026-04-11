@@ -2,10 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, requireAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
-// GET /api/team — List all users (admin only)
+// GET /api/team — List all users
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAuth();
+
+    // MOCK DATA FALLBACK
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
+    
+    if (isMockMode) {
+      const { MOCK_USERS } = await import('@/lib/mock-data');
+      return NextResponse.json({ members: MOCK_USERS });
+    }
+
     const supabase = await createClient();
 
     const { data, error } = await supabase
