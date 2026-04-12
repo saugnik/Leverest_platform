@@ -24,8 +24,8 @@ function getGrad(name: string) {
   return g[name.charCodeAt(0) % g.length];
 }
 function getStageLabel(s: string) {
-  const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting',documents_requested:'Docs Requested',internal_processing:'Internal Processing',proposal_sent:'Proposal Sent',approved:'Approved' };
-  return m[s] || s;
+  const stg = PIPELINE_STAGES.find(x => x.id === s);
+  return stg ? stg.label : s;
 }
 function getLoanTypeLabel(t: string) {
   const m: Record<string,string> = { working_capital:'Working Capital',term_loan:'Term Loan',od_cc:'OD / CC',project_finance:'Project Finance',equipment_finance:'Equipment Finance' };
@@ -63,9 +63,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ client_name: '', loan_type: '', loan_amount: 0, stage: '', commission_percent: 0 });
   const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [removedMembers, setRemovedMembers] = useState<string[]>([]);
   const [memberInput, setMemberInput] = useState('');
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Raise Query State
+  const [showQueryModal, setShowQueryModal] = useState(false);
+  const [queryForm, setQueryForm] = useState({ title: '', description: '' });
+  const [isRaising, setIsRaising] = useState(false);
 
   const openEditModal = async () => {
     if (!data?.project) return;
@@ -78,6 +84,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       commission_percent: p.commission_percent || 0,
     });
     setNewMembers([]);
+    setRemovedMembers([]);
     setMemberInput('');
     setShowEditModal(true);
 
@@ -96,7 +103,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/projects/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editForm, new_members: newMembers }),
+        body: JSON.stringify({ ...editForm, new_members: newMembers, remove_members: removedMembers }),
       });
       const result = await res.json();
       if (result.success) {
@@ -110,7 +117,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           return {
             ...prev,
             project: { ...prev.project, ...editForm },
-            members: [...(prev.members || []), ...addedMembers]
+            members: [...(prev.members || []).filter((m: any) => !removedMembers.includes(m.user_email)), ...addedMembers]
           };
         });
         setShowEditModal(false);
@@ -151,6 +158,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleRaiseQuery = async () => {
+    if (!queryForm.title.trim() || !queryForm.description.trim()) return;
+    setIsRaising(true);
+    try {
+      const res = await fetch(`/api/queries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          project_id: id,
+          title: queryForm.title,
+          description: queryForm.description,
+          status: 'open',
+          source: 'internal',
+        })
+      });
+      const data = await res.json();
+      if (data.success || data.query) {
+        setQueryForm({ title: '', description: '' });
+        setShowQueryModal(false);
+        window.location.reload();
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error raising query.');
+    } finally {
+      setIsRaising(false);
+    }
+  };
+
   useEffect(() => {
     fetch(`/api/projects/${id}`)
       .then(res => res.json())
@@ -161,6 +199,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading...</div>;
 
   const { project, documents: docs = [], queries = [], notes = [], activity = [], spocs = [], members = [] } = data || {};
+
+  if (data?.error === 'Forbidden') return (
+    <div style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-3)' }} className="fade-up">
+      <AlertCircle size={48} style={{ color: '#F87171', margin: '0 auto 1rem', opacity: 0.8 }} />
+      <h2 style={{ color: 'var(--text-1)', marginBottom: '0.5rem', fontFamily: 'var(--font-playfair)' }}>Access Denied</h2>
+      <p style={{ marginBottom: '2rem', fontSize: '0.85rem' }}>You do not have permission to view or manage this project's details. You must be added to the project team.</p>
+      <Link href="/dashboard/projects" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+        <ArrowLeft size={14} /> Back to Projects
+      </Link>
+    </div>
+  );
 
   if (!project) return (
     <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
@@ -202,7 +251,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-1)' }}>
               {project.client_name}
             </div>
-            <span className={`pill stage-${project.stage}`}>{getStageLabel(project.stage)}</span>
+            <span className="pill pill-gold">{getStageLabel(project.stage)}</span>
             <span className="pill pill-slate">{project.company_type === 'nbfc' ? 'NBFC' : 'Mfg / Service'}</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '5px' }}>{project.description}</div>
@@ -225,13 +274,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </span>
           <span style={{ fontSize: '0.72rem', color: 'var(--gold)' }}>Stage {currentStageIdx + 1} of {PIPELINE_STAGES.length}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="slider-container" style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', paddingBottom: '12px', scrollSnapType: 'x mandatory' }}>
           {PIPELINE_STAGES.map((stage, idx) => {
             const done = idx < currentStageIdx;
             const current = idx === currentStageIdx;
             return (
-              <div key={stage.id} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+              <div key={stage.id} style={{ minWidth: '90px', flex: 1, display: 'flex', alignItems: 'center', scrollSnapAlign: 'start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', position: 'relative', width: '100%' }}>
                   <div style={{
                     width: '24px', height: '24px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -251,10 +300,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   }} className="pip-lbl">
                     {stage.label}
                   </div>
+                  {idx < PIPELINE_STAGES.length - 1 && (
+                    <div style={{ position: 'absolute', right: '-50%', top: '11px', width: '100%', height: '2px', background: idx < currentStageIdx ? '#C9960C' : 'rgba(255,255,255,0.07)', zIndex: 0 }} />
+                  )}
                 </div>
-                {idx < PIPELINE_STAGES.length - 1 && (
-                  <div style={{ flex: 1, height: '2px', background: idx < currentStageIdx ? '#C9960C' : 'rgba(255,255,255,0.07)', margin: '0 2px' }} />
-                )}
               </div>
             );
           })}
@@ -519,7 +568,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{queries.length} total · {queries.filter((q: any) => q.status === 'open').length} open</span>
-              <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Raise Query</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowQueryModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Plus size={12} /> Raise Query</button>
             </div>
             <div className="card">
               <div className="tbl-wrap">
@@ -650,6 +699,46 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+      {/* Raise Query Modal */}
+      {showQueryModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '480px', padding: '24px' }}>
+            <h3 style={{ marginBottom: '16px', fontSize: '1.2rem', fontFamily: 'var(--font-playfair)', color: 'var(--text-1)' }}>Raise New Query</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Query Title</label>
+                <input
+                  type="text"
+                  className="field"
+                  value={queryForm.title}
+                  onChange={e => setQueryForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="e.g. Missing signatures on Form 16"
+                />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: '6px', display: 'block' }}>Description</label>
+                <textarea
+                  className="field"
+                  style={{ minHeight: '100px' }}
+                  value={queryForm.description}
+                  onChange={e => setQueryForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Provide more context..."
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn btn-ghost" onClick={() => setShowQueryModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleRaiseQuery} disabled={isRaising || !queryForm.title || !queryForm.description}>
+                {isRaising ? 'Raising...' : 'Raise Query'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Project Modal */}
       {showEditModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditModal(false)}>
@@ -741,9 +830,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 
                 {/* Existing Members */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                  {members.map((m: any, i: number) => (
-                    <span key={i} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-3)' }}>
+                  {members.filter((m: any) => !removedMembers.includes(m.user_email)).map((m: any, i: number) => (
+                    <span key={i} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {m.user_email}
+                      {user?.role === 'admin' && (
+                        <button type="button" onClick={() => setRemovedMembers(prev => [...prev, m.user_email])} style={{ background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={10} /></button>
+                      )}
                     </span>
                   ))}
                   {newMembers.map((m, i) => (

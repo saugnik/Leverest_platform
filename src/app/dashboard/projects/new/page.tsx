@@ -63,8 +63,9 @@ export default function NewProjectPage() {
   const [form, setForm] = useState({
     company_name: '', company_type: '', loan_type: '', loan_amount: '',
     lead_source: '',
-    description: '', deadline: '', stage: 'lead_received',
+    description: '', deadline: '', stage: 'client_meeting',
     commission_percentage: '1.5',
+    created_by: '',
     team: [] as string[],
   });
 
@@ -90,6 +91,7 @@ export default function NewProjectPage() {
         commission_percent: Number(form.commission_percentage || 0),
         branch: 'kolkata',
         team_emails: form.team.length ? form.team : [user?.email || ''],
+        created_by: form.created_by,
         spocs: []
       };
 
@@ -184,6 +186,15 @@ export default function NewProjectPage() {
               {LEAD_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+          <div>
+            <Label>Lead Owner (Who brought it?)</Label>
+            <select className="field" value={form.created_by} onChange={e => set('created_by', e.target.value)}>
+              <option value="">Myself ({user?.name})</option>
+              {teamUsers.map(u => <option key={u.id} value={u.email}>{u.name}</option>)}
+            </select>
+          </div>
+        </Row>
+        <Row>
           <div>
             <Label>Commission % (Leverest)</Label>
             <input className="field" type="number" step="0.25" placeholder="1.5" value={form.commission_percentage} onChange={e => set('commission_percentage', e.target.value)} />

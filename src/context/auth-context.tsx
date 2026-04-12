@@ -70,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Save to localStorage immediately
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(found));
           document.cookie = `sb-auth-token=mock-token-xyz; path=/; max-age=86400`;
+          document.cookie = `mock-user-email=${found.email}; path=/; max-age=86400`;
           setUser(found);
           return { success: true };
         } else {
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Save to localStorage immediately
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(found));
       document.cookie = `sb-auth-token=mock-token-xyz; path=/; max-age=86400`;
+      document.cookie = `mock-user-email=${found.email}; path=/; max-age=86400`;
       setUser(found);
       return { success: true };
     }
@@ -131,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     document.cookie = `sb-auth-token=; path=/; max-age=0`;
+    document.cookie = `mock-user-email=; path=/; max-age=0`;
     document.cookie = `lv_spoc_session=; path=/; max-age=0`;
   }, []);
 

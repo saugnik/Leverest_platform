@@ -32,6 +32,21 @@ export async function getUser(): Promise<LeverestUser | null> {
   try {
     const cookieStore = await cookies();
     if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
+      const mockEmail = cookieStore.get('mock-user-email')?.value;
+      if (mockEmail) {
+        const { MOCK_USERS } = await import('@/lib/mock-data');
+        const mUser = MOCK_USERS.find(u => u.email === mockEmail);
+        if (mUser) {
+          return {
+            email: mUser.email,
+            name: mUser.name,
+            role: mUser.role,
+            employee_type: 'mock',
+            branch: mUser.branch,
+            is_admin: mUser.role === 'admin'
+          };
+        }
+      }
       return {
         email: 'admin@leverestfin.com',
         name: 'Admin Test',
@@ -96,6 +111,16 @@ export async function requireProjectAccess(projectId: string): Promise<LeverestU
   const user = await requireAuth();
 
   if (user.is_admin) return user;
+
+  const cookieStore = await cookies();
+  if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
+    const { MOCK_PROJECTS } = await import('@/lib/mock-data');
+    const proj = MOCK_PROJECTS.find(p => p.id === projectId);
+    if (!proj || !proj.assigned_team || !proj.assigned_team.includes(user.email)) {
+      throw new Error('FORBIDDEN');
+    }
+    return user;
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase

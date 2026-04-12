@@ -19,10 +19,9 @@ export async function GET() {
       return NextResponse.json({ projects: getProjectsByUser(user.email, user.role), user });
     }
 
-    const supabase = await createClient();
+    const supabase = await createAdminClient();
 
-    // RLS automatically filters to projects where user_email is in project_members
-    // (or all projects if is_admin row policy allows it)
+    // Fetch all projects bypasses RLS so everyone can see the projects list.
     const { data, error } = await supabase
       .from('projects')
       .select('*')
@@ -75,6 +74,7 @@ export async function POST(request: NextRequest) {
       branch,
       team_emails, // string[] of @leverestfin.com emails
       spocs,       // { name, email, phone?, designation?, password }[]
+      created_by,  // Optional: override who brought the lead
     } = body;
 
     if (!client_name || !company_type || !branch) {
@@ -95,10 +95,10 @@ export async function POST(request: NextRequest) {
         bank: bank || '',
         commission_percent: commission_percent || 0,
         branch,
-        stage: 'lead_received',
+        stage: 'client_meeting',
         assigned_team: team_emails && team_emails.length ? team_emails : [user.email],
         spoc_ids: [],
-        created_by: user.email,
+        created_by: created_by || user.email,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         description: '',
@@ -122,8 +122,8 @@ export async function POST(request: NextRequest) {
         bank,
         commission_percent,
         branch,
-        stage: 'lead_received',
-        created_by: user.email,
+        stage: 'client_meeting',
+        created_by: created_by || user.email,
       })
       .select()
       .single();

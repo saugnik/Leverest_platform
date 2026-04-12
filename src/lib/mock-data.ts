@@ -44,7 +44,7 @@ export const MOCK_PROJECTS: Project[] = [
     company_name: "Leverest AI Validation Test",
     company_type: "manufacturing_service",
     branch: "kolkata",
-    stage: "lead_received",
+    stage: "client_meeting",
     lead_source: "direct",
     loan_type: "working_capital",
     loan_amount: 50000000,
@@ -121,15 +121,8 @@ export function getProjectDocCompletionPercent(projectId: string): number {
 }
 
 export function getProjectsByUser(userEmail: string, userRole: string): Project[] {
-  if (
-    userRole === 'admin' ||
-    userRole === 'accounts' ||
-    userRole === 'mis' ||
-    userRole === 'engagement_assistant'
-  ) {
-    return MOCK_PROJECTS;
-  }
-  return MOCK_PROJECTS.filter((p) => p.assigned_team.includes(userEmail));
+  // Return all projects so everyone can see the project list on the dashboard
+  return MOCK_PROJECTS;
 }
 
 export function formatCurrency(amount: number): string {
@@ -139,13 +132,5 @@ export function formatCurrency(amount: number): string {
 }
 
 export function getStageIndex(stage: string): number {
-  const stages = [
-    'lead_received',
-    'meeting_done',
-    'documents_requested',
-    'internal_processing',
-    'proposal_sent',
-    'approved',
-  ];
-  return stages.indexOf(stage);
+  return PIPELINE_STAGES.findIndex(s => s.id === stage);
 }

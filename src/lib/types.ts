@@ -14,13 +14,7 @@ export type UserRole =
 
 export type Branch = 'kolkata' | 'delhi';
 
-export type PipelineStage =
-  | 'lead_received'
-  | 'meeting_done'
-  | 'documents_requested'
-  | 'internal_processing'
-  | 'proposal_sent'
-  | 'approved';
+export type PipelineStage = string;
 
 export type CompanyType = 'manufacturing_service' | 'nbfc';
 
@@ -242,12 +236,39 @@ export const NBFC_CHECKLIST: { category: string; docs: string[] }[] = [
 ];
 
 export const PIPELINE_STAGES: { id: PipelineStage; label: string; description: string }[] = [
-  { id: 'lead_received', label: 'Lead Received', description: 'Initial lead captured' },
-  { id: 'meeting_done', label: 'Meeting Done', description: 'Client meeting completed' },
-  { id: 'documents_requested', label: 'Documents Requested', description: 'Checklist activated' },
-  { id: 'internal_processing', label: 'Internal Processing', description: 'Leverest internal review' },
-  { id: 'proposal_sent', label: 'Proposal Sent', description: 'Proposal submitted to client' },
-  { id: 'approved', label: 'Approved', description: 'Loan sanctioned' },
+  { id: 'client_meeting', label: 'Client Meeting Created', description: 'Assigned Bank Name can be Unknown' },
+  { id: 'request_documents', label: 'Request Documents', description: 'Send email requesting basic documents' },
+  { id: 'follow_up_documents', label: 'Doc Follow-up', description: 'Track requested documents receipt' },
+  { id: 'executive_summary', label: 'Executive Summary', description: 'Prepare summary post doc receipt' },
+  { id: 'bank_identification', label: 'Bank Identification', description: 'Identify suitable banks for proposal' },
+  { id: 'preliminary_meetings', label: 'Preliminary Meetings', description: 'Discuss new proposal with banks' },
+  { id: 'shortlisting', label: 'Shortlisting', description: 'List banks expressing interest' },
+  { id: 'data_sharing', label: 'Data Sharing', description: 'Send document package to banks' },
+  { id: 'bank_revert', label: 'Bank Revert', description: 'Initial feedback from banks' },
+  { id: 'query_handling', label: 'Query Handling', description: 'Collect queries from banks' },
+  { id: 'resolution', label: 'Resolution', description: 'Sort queries and send to client' },
+  { id: 'follow_up_queries', label: 'Follow-up Queries', description: 'Ensure client replies' },
+  { id: 'prepare_query_reply', label: 'Prepare Query Reply', description: 'Draft and get reviewed by EP' },
+  { id: 'review_query_reply', label: 'Review Query Reply', description: 'Review and finalize reply' },
+  { id: 'submission', label: 'Submission', description: 'Forward replies back to banks' },
+  { id: 'initiate_legal_valuation', label: 'Legal & Valuation', description: 'Initiate and obtain draft reports' },
+  { id: 'client_bank_meeting', label: 'Client-Bank Meeting', description: 'Arrange VC/Meeting' },
+  { id: 'secondary_queries', label: 'Secondary Queries', description: 'Address post-meeting queries' },
+  { id: 'submit_final_note', label: 'Submit Final Note', description: 'Submit note/sheet before approval' },
+  { id: 'in_principal_sanction', label: 'In-Principal Sanction', description: 'Secure sanction letter' },
+  { id: 'followup_bank_1', label: 'Follow-up Bank (T+2)', description: 'Follow-up if sanction delayed' },
+  { id: 'terms_discussion', label: 'Terms Discussion', description: 'Discuss pricing/security with client' },
+  { id: 'bank_coordination', label: 'Bank Coordination', description: 'Inform client requests & get draft' },
+  { id: 'sanction_approval', label: 'Sanction Approval', description: 'Review draft and approach for final' },
+  { id: 'condition_review', label: 'Condition Review (PDC)', description: 'Check pre-disbursement conditions' },
+  { id: 'rectification', label: 'Rectification', description: 'Address outstanding PDCs' },
+  { id: 'final_sanction', label: 'Final Sanction', description: 'Secure formal setup' },
+  { id: 'followup_bank_2', label: 'Follow-up Bank (T+2)', description: 'Follow-up if final sanction delayed' },
+  { id: 'compliance', label: 'Compliance', description: 'Fulfill pre-disbursement conditions' },
+  { id: 'disbursement', label: 'Disbursement', description: 'Execute loan process' },
+  { id: 'post_disb_compliance', label: 'Post-Disb. Compliance', description: 'Monitor post-disbursement terms' },
+  { id: 'future_planning', label: 'Future Planning', description: 'Discuss next facility needs' },
+  { id: 'fee_realization', label: 'Fee Realization', description: 'Ensure fee received' },
 ];
 
 export const ROLE_LABELS: Record<UserRole, string> = {

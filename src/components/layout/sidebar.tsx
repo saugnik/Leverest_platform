@@ -8,7 +8,7 @@ import { MOCK_NOTIFICATIONS } from '@/lib/mock-data';
 import {
   LayoutDashboard, FolderKanban, Columns2, FileText, MessageSquare,
   Banknote, DollarSign, StickyNote, Activity, Users, Bell, LogOut,
-  ChevronLeft, ChevronRight, Building2, Settings, Brain
+  ChevronLeft, ChevronRight, Building2, Settings, Brain, BarChart3
 } from 'lucide-react';
 
 function getInitials(name: string) {
@@ -50,6 +50,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   // Operations
   { href: '/dashboard',              label: 'Dashboard',      icon: LayoutDashboard, section: 'Operations', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis','engagement_assistant'] },
+  { href: '/dashboard/pipeline',     label: 'Pipeline Dist.', icon: BarChart3,       section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','mis'] },
   { href: '/dashboard/projects',     label: 'Projects',       icon: FolderKanban,    section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
   { href: '/dashboard/kanban',       label: 'Kanban Board',   icon: Columns2,        section: '', roles: ['admin','manager','relation_partner','relation_manager','engagement_partner','engagement_manager','executive','mis'] },
   // Deal management

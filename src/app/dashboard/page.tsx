@@ -677,22 +677,17 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="card-header-title">Pipeline Distribution</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{projects.length} total</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{MOCK_PROJECTS.length} global</div>
           </div>
-          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="custom-scroll" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '190px', overflowY: 'auto' }}>
             {(() => {
-              const stageData = [
-                { id: 'lead_received',       label: 'Lead Received',   color: '#64748B', emoji: '📥' },
-                { id: 'meeting_done',        label: 'Meeting Done',    color: '#3B82F6', emoji: '🤝' },
-                { id: 'documents_requested', label: 'Docs Requested',  color: '#8B5CF6', emoji: '📋' },
-                { id: 'internal_processing', label: 'Processing',      color: '#F59E0B', emoji: '⚙️' },
-                { id: 'proposal_sent',       label: 'Proposal Sent',   color: '#06B6D4', emoji: '📤' },
-                { id: 'approved',            label: 'Approved',        color: '#22C55E', emoji: '✅' },
-              ];
+              const allCompanyProjects = MOCK_PROJECTS; // Aggregate company-wide
 
-              const counts = stageData.map((s) => ({
-                ...s,
-                count: projects.filter((p) => p.stage === s.id).length,
+              const counts = PIPELINE_STAGES.map((s) => ({
+                id: s.id,
+                label: s.label,
+                count: allCompanyProjects.filter((p) => p.stage === s.id).length,
+                color: '#60A5FA', // Use uniform color for generic pipeline view
               }));
               const maxCount = Math.max(...counts.map((c) => c.count), 1);
 
@@ -703,7 +698,7 @@ export default function DashboardPage() {
                     display: 'flex', alignItems: 'center', gap: '5px',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    <span style={{ fontSize: '0.72rem' }}>{item.emoji}</span>
+                    <span style={{ fontSize: '0.52rem', background: 'rgba(255,255,255,0.1)', padding: '2px 4px', borderRadius: '4px', textAlign: 'center', width: '20px' }}>{PIPELINE_STAGES.findIndex(x => x.id === item.id) + 1}</span>
                     {item.label}
                   </div>
                   <div style={{ flex: 1, height: '16px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>

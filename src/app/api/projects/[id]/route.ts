@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (field in body) updates[field] = body[field];
     }
 
-    if (Object.keys(updates).length === 0 && (!body.new_members || body.new_members.length === 0)) {
+    if (Object.keys(updates).length === 0 && (!body.new_members || body.new_members.length === 0) && (!body.remove_members || body.remove_members.length === 0)) {
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 });
     }
 
@@ -102,8 +102,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       // Mutate the mock data in memory so the new login session will see it
       const { MOCK_PROJECTS } = await import('@/lib/mock-data');
       const projectIdx = MOCK_PROJECTS.findIndex(p => p.id === id);
-      if (projectIdx > -1 && body.new_members) {
-        MOCK_PROJECTS[projectIdx].assigned_team.push(...body.new_members);
+      if (projectIdx > -1) {
+        if (!MOCK_PROJECTS[projectIdx].assigned_team) MOCK_PROJECTS[projectIdx].assigned_team = [];
+        if (body.new_members && Array.isArray(body.new_members)) {
+          MOCK_PROJECTS[projectIdx].assigned_team.push(...body.new_members);
+        }
+        if (body.remove_members && Array.isArray(body.remove_members)) {
+          MOCK_PROJECTS[projectIdx].assigned_team = MOCK_PROJECTS[projectIdx].assigned_team.filter(email => !body.remove_members.includes(email));
+        }
       }
       return NextResponse.json({ success: true, project: { id, ...updates } });
     }
@@ -123,7 +129,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     // Add new members if provided
-    if (body.new_members && Array.isArray(body.new_members)) {
+    if (body.new_members && Array.isArray(body.new_members) && body.new_members.length > 0) {
       for (const memberEmail of body.new_members) {
         await supabase.from('project_members').insert({
           project_id: id,
@@ -137,6 +143,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         action: 'members_added',
         performed_by: user.email,
         details: { new_members: body.new_members },
+      });
+    }
+
+    // Remove members if provided
+    if (body.remove_members && Array.isArray(body.remove_members) && body.remove_members.length > 0) {
+      for (const memberEmail of body.remove_members) {
+        await supabase.from('project_members').delete().match({ project_id: id, user_email: memberEmail });
+      }
+      
+      await supabase.from('activity_log').insert({
+        project_id: id,
+        action: 'members_removed',
+        performed_by: user.email,
+        details: { removed_members: body.remove_members },
       });
     }
 
