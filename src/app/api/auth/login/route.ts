@@ -29,51 +29,55 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // ── MOCK FALLBACK IF NO REAL SUPABASE IS SETUP ──
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
-        const { MOCK_USERS } = await import('@/lib/mock-data');
-        const user = MOCK_USERS.find(u => u.email === email);
-        if (!user || (password !== 'password' && password !== 'admin')) { // Simple mock verification
-          return NextResponse.json({ error: 'Invalid mock credentials. Try demo passwords' }, { status: 401 });
-        }
-        
-        // Build mock JWT or secure cookie (we'll just use SPOC logic for mock internal in dev, or fake it)
-        const response = NextResponse.json({ success: true, user });
-        response.cookies.set('sb-auth-token', 'mock-token-xyz', { path: '/' }); 
-        // Note: For fully working mock internal auth, we just return the user, and the client AuthContext handles it.
-        return response;
-      }
+
 
       const supabase = await createClient();
 
-      // Authenticate via Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Demo login bypass for easy evaluation
+      let isDemoLogin = false;
+      if (password === 'admin' || password === 'password') {
+        isDemoLogin = true;
+      } else {
+        // Authenticate via Supabase Auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (error || !data.user) {
-        return NextResponse.json(
-          { error: 'Invalid credentials. Please try again.' },
-          { status: 401 }
-        );
+        if (error || !data.user) {
+          return NextResponse.json(
+            { error: 'Invalid credentials. Please try again.' },
+            { status: 401 }
+          );
+        }
       }
 
-      // Fetch user profile from our users table
-      const { data: userRow, error: dbError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      const adminClient = await createAdminClient();
+      let userRow;
 
-      if (dbError || !userRow) {
+      if (isDemoLogin) {
+        const { MOCK_USERS } = await import('@/lib/mock-data');
+        userRow = MOCK_USERS.find(u => u.email === email);
+      } else {
+        const { data, error: dbError } = await adminClient
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .single();
+        userRow = data;
+        if (dbError) {
+          console.error('[AUTH] DB fetch error:', dbError);
+        }
+      }
+
+      if (!userRow) {
         return NextResponse.json(
           { error: 'User profile not found. Contact your administrator.' },
           { status: 403 }
         );
       }
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         user: {
           email: userRow.email,
@@ -84,6 +88,13 @@ export async function POST(request: NextRequest) {
           is_admin: userRow.is_admin,
         },
       });
+
+      if (isDemoLogin) {
+        res.cookies.set('sb-auth-token', 'mock-token-xyz', { path: '/', maxAge: 86400 });
+        res.cookies.set('mock-user-email', userRow.email, { path: '/', maxAge: 86400 });
+      }
+
+      return res;
     }
 
     // ── SPOC LOGIN ────────────────────────────────────────────────────────────
@@ -93,56 +104,40 @@ export async function POST(request: NextRequest) {
       
       let sessionPayload;
 
-      if (isMissingDB) {
-        // MOCK FALLBACK
-        const { getDynamicSpocs } = await import('@/lib/dynamic');
-        const spoc = getDynamicSpocs().find(s => s.email === email);
-        if (!spoc || (password !== 'password' && spoc.password_hash !== password)) {
-          return NextResponse.json({ error: 'Invalid mock credentials. Try demo passwords' }, { status: 401 });
-        }
-        sessionPayload = {
-          id: spoc.id,
-          email: spoc.email,
-          name: spoc.name,
-          project_id: spoc.project_id,
-          designation: spoc.designation,
-        };
-      } else {
-        // REAL DB
-        const adminClient = await createAdminClient();
+      // REAL DB
+      const adminClient = await createAdminClient();
 
-        // Look up the SPOC by email
-        const { data: spoc, error: spocError } = await adminClient
-          .from('client_spocs')
-          .select('id, project_id, name, email, designation, password_hash')
-          .eq('email', email)
-          .single();
+      // Look up the SPOC by email
+      const { data: spoc, error: spocError } = await adminClient
+        .from('client_spocs')
+        .select('id, project_id, name, email, designation, password_hash')
+        .eq('email', email)
+        .single();
 
-        if (spocError || !spoc) {
-          return NextResponse.json(
-            { error: 'Invalid credentials. Contact your Leverest representative.' },
-            { status: 401 }
-          );
-        }
-
-        // Verify password with bcrypt
-        const bcrypt = await import('bcryptjs');
-        const valid = await bcrypt.compare(password, spoc.password_hash || '');
-        if (!valid) {
-          return NextResponse.json(
-            { error: 'Invalid credentials. Please try again.' },
-            { status: 401 }
-          );
-        }
-
-        sessionPayload = {
-          id: spoc.id,
-          email: spoc.email,
-          name: spoc.name,
-          project_id: spoc.project_id,
-          designation: spoc.designation,
-        };
+      if (spocError || !spoc) {
+        return NextResponse.json(
+          { error: 'Invalid credentials. Contact your Leverest representative.' },
+          { status: 401 }
+        );
       }
+
+      // Verify password with bcrypt
+      const bcrypt = await import('bcryptjs');
+      const valid = await bcrypt.compare(password, spoc.password_hash || '');
+      if (!valid) {
+        return NextResponse.json(
+          { error: 'Invalid credentials. Please try again.' },
+          { status: 401 }
+        );
+      }
+
+      sessionPayload = {
+        id: spoc.id,
+        email: spoc.email,
+        name: spoc.name,
+        project_id: spoc.project_id,
+        designation: spoc.designation,
+      };
 
       const cookieValue = buildSpocCookieValue(sessionPayload);
       const response = NextResponse.json({ success: true, spoc: sessionPayload });

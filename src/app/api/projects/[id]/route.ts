@@ -12,27 +12,48 @@ export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     await requireProjectAccess(id);
-
-    // MOCK DATA FALLBACK
     const cookieStore = await cookies();
-    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
-    if (isMockMode) {
-      const { MOCK_PROJECTS, MOCK_DOCUMENTS, MOCK_QUERIES, MOCK_NOTES, MOCK_ACTIVITY_LOGS } = await import('@/lib/mock-data');
-      const project = MOCK_PROJECTS.find(p => p.id === id);
-      if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+    const isMock = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz';
+
+    if (isMock) {
+      const { 
+        MOCK_PROJECTS, 
+        MOCK_SPOCS, 
+        MOCK_DOCUMENTS, 
+        MOCK_QUERIES, 
+        MOCK_NOTES, 
+        MOCK_ACTIVITY_LOGS 
+      } = await import('@/lib/mock-data');
+
+      let project = MOCK_PROJECTS.find(p => p.id === id);
+      if (!project) {
+        // Turbopack runs API routes in isolated workers, so MOCK_PROJECTS mutation 
+        // from POST might not be visible here. Generate a safe dummy project.
+        project = {
+          id,
+          client_name: 'Demo Project (Runtime)',
+          company_name: 'Demo Project (Runtime)',
+          company_type: 'manufacturing_service',
+          loan_type: 'working_capital',
+          loan_amount: 50000000,
+          bank: 'Standard Chartered',
+          commission_percent: 2.0,
+          branch: 'kolkata',
+          stage: 'client_meeting',
+          created_by: 'admin',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as any;
+      }
+
       return NextResponse.json({
         project,
-        members: project.assigned_team ? project.assigned_team.map(email => ({
-          user_email: email,
-          assigned_at: new Date().toISOString(),
-          assigned_by: 'admin@leverestfin.com'
-        })) : [{ user_email: 'admin@leverestfin.com', assigned_at: new Date().toISOString(), assigned_by: 'admin@leverestfin.com' }],
-        spocs: [{ id: 'spoc-1', name: 'John Doe', email: 'spoc@client.com', phone: '', designation: '', created_at: new Date().toISOString() }],
+        members: [{ user_email: project.created_by, assigned_at: new Date().toISOString(), assigned_by: 'system' }],
+        spocs: MOCK_SPOCS.filter(s => s.project_id === id),
         documents: MOCK_DOCUMENTS.filter(d => d.project_id === id),
         queries: MOCK_QUERIES.filter(q => q.project_id === id),
-
         notes: MOCK_NOTES.filter(n => n.project_id === id),
-        activity: MOCK_ACTIVITY_LOGS.filter(a => a.project_id === id),
+        activity: MOCK_ACTIVITY_LOGS.filter(a => a.project_id === id)
       });
     }
 
@@ -93,26 +114,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 });
     }
 
-    // MOCK DATA FALLBACK
-    const { cookies } = await import('next/headers');
-    const cookieStore = await cookies();
-    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
-    
-    if (isMockMode) {
-      // Mutate the mock data in memory so the new login session will see it
-      const { MOCK_PROJECTS } = await import('@/lib/mock-data');
-      const projectIdx = MOCK_PROJECTS.findIndex(p => p.id === id);
-      if (projectIdx > -1) {
-        if (!MOCK_PROJECTS[projectIdx].assigned_team) MOCK_PROJECTS[projectIdx].assigned_team = [];
-        if (body.new_members && Array.isArray(body.new_members)) {
-          MOCK_PROJECTS[projectIdx].assigned_team.push(...body.new_members);
-        }
-        if (body.remove_members && Array.isArray(body.remove_members)) {
-          MOCK_PROJECTS[projectIdx].assigned_team = MOCK_PROJECTS[projectIdx].assigned_team.filter(email => !body.remove_members.includes(email));
-        }
-      }
-      return NextResponse.json({ success: true, project: { id, ...updates } });
-    }
+
 
     const supabase = await createClient();
     let data = null;

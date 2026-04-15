@@ -11,12 +11,12 @@ import { MANUFACTURING_SERVICE_CHECKLIST, NBFC_CHECKLIST } from '@/lib/types';
 export async function GET() {
   try {
     const user = await requireAuth();
-
-    // MOCK DATA FALLBACK
     const cookieStore = await cookies();
-    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
-      const { getProjectsByUser } = await import('@/lib/mock-data');
-      return NextResponse.json({ projects: getProjectsByUser(user.email, user.role), user });
+    const isMock = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz';
+
+    if (isMock) {
+      const { MOCK_PROJECTS } = await import('@/lib/mock-data');
+      return NextResponse.json({ projects: MOCK_PROJECTS, user });
     }
 
     const supabase = await createAdminClient();
@@ -27,7 +27,10 @@ export async function GET() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[GET /api/projects] Supabase error:', error);
+      return NextResponse.json({ projects: [], user });
+    }
 
     return NextResponse.json({ projects: data, user });
   } catch (err: unknown) {
@@ -81,31 +84,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
 
+    const { cookies } = await import('next/headers');
     const cookieStore = await cookies();
-    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
       const { MOCK_PROJECTS } = await import('@/lib/mock-data');
-      const newMockProject = {
-        id: `mock-proj-${Date.now()}`,
-        name: `${client_name} — ${loan_type || 'Loan'}`,
-        client_name,
-        company_name: client_name,
-        company_type,
-        loan_type: loan_type || '',
-        loan_amount: loan_amount || 0,
-        bank: bank || '',
-        commission_percent: commission_percent || 0,
-        branch,
-        stage: 'client_meeting',
-        assigned_team: team_emails && team_emails.length ? team_emails : [user.email],
-        spoc_ids: [],
-        created_by: created_by || user.email,
+      const newProject = {
+        id: `p-${Date.now()}`,
+        client_name, company_name: client_name, company_type, loan_type, loan_amount, bank,
+        commission_percent, branch, stage: 'client_meeting', created_by: created_by || user.email,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        description: '',
       };
-      
-      MOCK_PROJECTS.unshift(newMockProject as any);
-      return NextResponse.json({ success: true, project: newMockProject }, { status: 201 });
+      MOCK_PROJECTS.unshift(newProject as any);
+      return NextResponse.json({ success: true, project: newProject });
     }
 
     const supabase = await createClient();

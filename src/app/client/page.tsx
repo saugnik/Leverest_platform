@@ -1,18 +1,65 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import { MOCK_PROJECTS, MOCK_SPOCS, MOCK_QUERIES, getProjectDocCompletionPercent, formatCurrency, MOCK_DOCUMENTS } from '@/lib/mock-data';
+import { formatCurrency } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
-import { Upload, MessageSquare, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, MessageSquare, ChevronRight, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { getDynamicSpocs, getDynamicProjects } from '@/lib/dynamic';
 
 export default function ClientDashboard() {
   const { user } = useAuth();
-  const mergedSpocs = [...MOCK_SPOCS, ...getDynamicSpocs()];
+  const [docs, setDocs] = useState<any[]>([]);
+  const [queries, setQueries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const mergedSpocs = [...getDynamicSpocs()];
   const spoc = mergedSpocs.find(s => s.email === user?.email);
-  const mergedProjects = [...MOCK_PROJECTS, ...getDynamicProjects() as any];
+  const mergedProjects = [...getDynamicProjects() as any];
   const project = spoc ? mergedProjects.find((p: any) => p.id === spoc.project_id) : null;
+
+  useEffect(() => {
+    async function loadClientData() {
+      if (!spoc?.project_id) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const [docsRes, queriesRes] = await Promise.all([
+          fetch(`/api/documents?project_id=${spoc.project_id}`),
+          fetch(`/api/queries?project_id=${spoc.project_id}`),
+        ]);
+        
+        const docsData = await docsRes.json();
+        const queriesData = await queriesRes.json();
+        
+        if (docsData.documents) setDocs(docsData.documents);
+        if (queriesData.queries) setQueries(queriesData.queries);
+      } catch (err) {
+        console.error('Failed to load client data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    if (spoc) {
+      loadClientData();
+    } else {
+      setLoading(false);
+    }
+  }, [spoc]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading your dashboard...
+      </div>
+    );
+  }
 
   if (!project || !spoc) {
     return (
@@ -22,14 +69,13 @@ export default function ClientDashboard() {
     );
   }
 
-  const docs = MOCK_DOCUMENTS.filter(d => d.project_id === project.id);
-  const queries = MOCK_QUERIES.filter(q => q.project_id === project.id && q.status !== 'resolved');
-  const completion = getProjectDocCompletionPercent(project.id);
+  const completion = docs.length > 0 ? Math.round((docs.filter(d => d.status === 'received').length / docs.length) * 100) : 0;
   const currentStageIdx = PIPELINE_STAGES.findIndex(s => s.id === project.stage);
 
   const received = docs.filter(d => d.status === 'received').length;
   const pending  = docs.filter(d => d.status === 'pending').length;
   const missing  = docs.filter(d => d.status === 'required').length;
+  const openQueries = queries.filter(q => q.status === 'open').length;
 
   function getStageLabel(s: string) {
     const m: Record<string,string> = { lead_received:'Lead',meeting_done:'Meeting Done',documents_requested:'Docs Requested',internal_processing:'Processing',proposal_sent:'Proposal Sent',approved:'Approved' };
@@ -68,7 +114,7 @@ export default function ClientDashboard() {
         {[
           { label: 'Docs Received', value: received, color: '#4ADE80', link: '/client/documents' },
           { label: 'Docs Pending', value: pending, color: '#FCD34D', link: '/client/documents' },
-          { label: 'Open Queries', value: queries.length, color: '#F87171', link: '/client/queries' },
+          { label: 'Open Queries', value: openQueries, color: '#F87171', link: '/client/queries' },
         ].map(k => (
           <Link key={k.label} href={k.link} style={{ textDecoration: 'none' }}>
             <div className="stat-card" style={{ cursor: 'pointer' }}>
@@ -91,24 +137,6 @@ export default function ClientDashboard() {
         <div className="progress-track lg" style={{ marginBottom: '14px' }}>
           <div className="progress-fill" style={{ width: `${completion}%` }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
-          {[
-            { label: 'Received', value: received, color: '#4ADE80', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.15)' },
-            { label: 'Pending', value: pending, color: '#FCD34D', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)' },
-            { label: 'Missing', value: missing, color: '#F87171', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.15)' },
-          ].map(s => (
-            <div key={s.label} style={{ textAlign: 'center', padding: '12px', background: s.bg, border: `1px solid ${s.border}`, borderRadius: '8px' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-3)', marginTop: '2px' }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-        {missing > 0 && (
-          <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <AlertCircle size={13} color="#F87171" />
-            <span style={{ fontSize: '0.76rem', color: '#F87171' }}>{missing} documents are still required. Please upload them to keep your application on track.</span>
-          </div>
-        )}
         <Link href="/client/documents" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', textDecoration: 'none' }}>
           <Upload size={15} /> Upload Documents
         </Link>
@@ -152,40 +180,16 @@ export default function ClientDashboard() {
       </div>
 
       {/* Open queries */}
-      {queries.length > 0 && (
+      {openQueries > 0 && (
         <div className="card">
           <div className="card-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
               <MessageSquare size={13} color="#F87171" />
-              <div className="card-header-title">Action Required — Queries ({queries.length})</div>
+              <div className="card-header-title">Action Required — Queries ({openQueries})</div>
             </div>
             <Link href="/client/queries" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--gold)', textDecoration: 'none' }}>
               View all <ChevronRight size={12} />
             </Link>
-          </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead><tr><th>Query</th><th>Priority</th><th>Raised By</th><th></th></tr></thead>
-              <tbody>
-                {queries.slice(0, 3).map(q => (
-                  <tr key={q.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: '0.8rem' }}>{q.title}</div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '2px' }}>{q.description.slice(0, 70)}…</div>
-                    </td>
-                    <td>
-                      <span className={`pill ${q.priority === 'high' ? 'pill-red' : 'pill-gold'}`}>{q.priority}</span>
-                    </td>
-                    <td style={{ fontSize: '0.73rem' }}>{q.raised_by_name}</td>
-                    <td>
-                      <Link href="/client/queries" className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
-                        Respond →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}

@@ -1,14 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { MOCK_USERS } from '@/lib/mock-data';
 import {
   Building2, Users, Lock, Bell, Database, Palette, Shield,
   ChevronRight, Check, AlertTriangle, Save, Plus, Trash2,
   Mail, Phone, MapPin, Globe, Eye, EyeOff, ToggleLeft, ToggleRight,
-  Key, RefreshCw, Download, Upload,
+  Key, RefreshCw, Download, Upload, Loader2, X,
 } from 'lucide-react';
 
 type SettingsTab =
@@ -128,6 +127,13 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('company');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [MOCK_USERS, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/team').then(res => res.json()).then(data => {
+      if (data.members) setUsers(data.members);
+    }).catch(err => console.error(err));
+  }, []);
 
   // Company settings state
   const [companyName, setCompanyName] = useState('Leverest Fintech Pvt. Ltd.');
@@ -156,6 +162,13 @@ export default function SettingsPage() {
   // Appearance
   const [accentColor, setAccentColor] = useState('#C9960C');
   const [densityMode, setDensityMode] = useState<'comfortable' | 'compact'>('comfortable');
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [newMember, setNewMember] = useState({ name: '', email: '', role: 'executive', designation: '', branch: 'Kolkata' });
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [exporting, setExporting] = useState<string | null>(null);
 
   function handleSave() {
     setSaving(true);
@@ -165,6 +178,118 @@ export default function SettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     }, 1200);
+  }
+
+  async function handleAddMember() {
+    if (!newMember.name || !newMember.email) return;
+    
+    setAddingMember(true);
+    try {
+      const res = await fetch('/api/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMember),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.member) {
+          setUsers(prev => [...prev, data.member]);
+        }
+        setShowAddMemberModal(false);
+        setNewMember({ name: '', email: '', role: 'executive', designation: '', branch: 'Kolkata' });
+      }
+    } catch (err) {
+      console.error('Failed to add member:', err);
+    } finally {
+      setAddingMember(false);
+    }
+  }
+
+  function handleExport(type: string) {
+    setExporting(type);
+    
+    setTimeout(() => {
+      let data: any[] = [];
+      let filename = '';
+      
+      switch (type) {
+        case 'projects':
+          data = projects.map(p => ({
+            'Company Name': p.company_name,
+            'Contact Person': p.contact_person,
+            'Email': p.contact_email,
+            'Phone': p.contact_phone,
+            'Loan Amount': p.loan_amount,
+            'Loan Type': p.loan_type,
+            'Stage': p.stage,
+            'Status': p.status,
+          }));
+          filename = 'projects-export.csv';
+          break;
+        case 'team':
+          data = MOCK_USERS.map(u => ({
+            'Name': u.name,
+            'Email': u.email,
+            'Role': u.role,
+            'Designation': u.designation,
+            'Branch': u.branch,
+            'Status': u.is_active ? 'Active' : 'Inactive',
+          }));
+          filename = 'team-export.csv';
+          break;
+        case 'activity':
+          filename = 'activity-export.csv';
+          break;
+        case 'commission':
+          filename = 'commission-export.csv';
+          break;
+      }
+      
+      // Generate CSV
+      if (data.length > 0) {
+        const headers = Object.keys(data[0]).join(',');
+        const rows = data.map(row => Object.values(row).join(','));
+        const csv = [headers, ...rows].join('\n');
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // For empty data, just download a header-only CSV
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([''], { type: 'text/csv' }));
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      
+      setExporting(null);
+    }, 500);
+  }
+
+  async function handleTestConnection() {
+    if (!supabaseUrl) return;
+    
+    setTestingConnection(true);
+    setConnectionStatus('idle');
+    
+    try {
+      const res = await fetch(supabaseUrl);
+      if (res.ok) {
+        setConnectionStatus('success');
+      } else {
+        setConnectionStatus('error');
+      }
+    } catch {
+      setConnectionStatus('error');
+    } finally {
+      setTestingConnection(false);
+    }
   }
 
   // Redirect non-admins
@@ -318,10 +443,71 @@ export default function SettingsPage() {
                     background: 'linear-gradient(135deg,#C9960C,#F0B429)', color: '#05100C',
                     fontWeight: 700, fontSize: '0.78rem', borderRadius: '7px', border: 'none',
                     cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
+                  }} onClick={() => setShowAddMemberModal(true)}>
                     <Plus size={13} /> Add Member
                   </button>
                 </div>
+
+                {/* Add Member Modal */}
+                {showAddMemberModal && (
+                  <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 1000,
+                  }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '480px', padding: '24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>Add Team Member</div>
+                        <button onClick={() => setShowAddMemberModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                          <X size={18} />
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Full Name *</label>
+                          <input type="text" value={newMember.name} onChange={e => setNewMember(p => ({ ...p, name: e.target.value }))} className="field" placeholder="John Doe" />
+                        </div>
+                        
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Email *</label>
+                          <input type="email" value={newMember.email} onChange={e => setNewMember(p => ({ ...p, email: e.target.value }))} className="field" placeholder="john@leverestfin.com" />
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Role</label>
+                            <select value={newMember.role} onChange={e => setNewMember(p => ({ ...p, role: e.target.value }))} className="field">
+                              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Branch</label>
+                            <select value={newMember.branch} onChange={e => setNewMember(p => ({ ...p, branch: e.target.value }))} className="field">
+                              <option value="Kolkata">Kolkata</option>
+                              <option value="Delhi">Delhi</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Designation</label>
+                          <input type="text" value={newMember.designation} onChange={e => setNewMember(p => ({ ...p, designation: e.target.value }))} className="field" placeholder="Senior Manager" />
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-ghost" onClick={() => setShowAddMemberModal(false)}>Cancel</button>
+                        <button className="btn btn-primary" disabled={!newMember.name || !newMember.email || addingMember} onClick={handleAddMember}>
+                          {addingMember ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Adding...</> : <><Plus size={14} /> Add Member</>}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="tbl-wrap">
                   <table className="tbl">
@@ -527,18 +713,27 @@ export default function SettingsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                   {[
-                    { label: 'Export All Projects', desc: 'Download complete project data as CSV', icon: Download },
-                    { label: 'Export Team Members', desc: 'Download team roster with roles', icon: Download },
-                    { label: 'Export Activity Log', desc: 'Full audit trail as CSV', icon: Download },
-                    { label: 'Export Commission Report', desc: 'Commission figures across all deals', icon: Download },
-                  ].map(({ label, desc, icon: Icon }) => (
-                    <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    { label: 'Export All Projects', desc: 'Download complete project data as CSV', type: 'projects' },
+                    { label: 'Export Team Members', desc: 'Download team roster with roles', type: 'team' },
+                    { label: 'Export Activity Log', desc: 'Full audit trail as CSV', type: 'activity' },
+                    { label: 'Export Commission Report', desc: 'Commission figures across all deals', type: 'commission' },
+                  ].map(({ label, desc, type }) => (
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                       <div>
                         <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{label}</div>
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '2px' }}>{desc}</div>
                       </div>
-                      <button style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 13px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-2)', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-                        <Icon size={13} /> Export
+                      <button 
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 13px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-2)', fontSize: '0.75rem', cursor: exporting ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        disabled={exporting !== null}
+                        onClick={() => handleExport(type)}
+                      >
+                        {exporting === type ? (
+                          <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                        ) : (
+                          <Download size={13} />
+                        )}
+                        {exporting === type ? 'Exporting...' : 'Export'}
                       </button>
                     </div>
                   ))}
@@ -556,9 +751,21 @@ export default function SettingsPage() {
                       The platform is currently running on in-memory mock data. To persist data across sessions, add your <code style={{ color: '#F0B429', fontFamily: 'monospace' }}>NEXT_PUBLIC_SUPABASE_URL</code> and <code style={{ color: '#F0B429', fontFamily: 'monospace' }}>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code style={{ color: '#F0B429', fontFamily: 'monospace' }}>.env.local</code>.
                     </div>
                     <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-                      <input className="field" placeholder="https://xxxx.supabase.co" style={{ flex: 1, fontSize: '0.75rem' }} />
-                      <button style={{ padding: '6px 13px', borderRadius: '6px', background: 'rgba(201,150,12,0.15)', border: '1px solid rgba(201,150,12,0.3)', color: '#F0B429', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        Test Connection
+                      <input className="field" placeholder="https://xxxx.supabase.co" style={{ flex: 1, fontSize: '0.75rem' }} value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} />
+                      <button 
+                        style={{ padding: '6px 13px', borderRadius: '6px', background: connectionStatus === 'success' ? 'rgba(34,197,94,0.15)' : connectionStatus === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(201,150,12,0.15)', border: `1px solid ${connectionStatus === 'success' ? 'rgba(34,197,94,0.3)' : connectionStatus === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(201,150,12,0.3)'}`, color: connectionStatus === 'success' ? '#4ADE80' : connectionStatus === 'error' ? '#F87171' : '#F0B429', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                        disabled={testingConnection || !supabaseUrl}
+                        onClick={handleTestConnection}
+                      >
+                        {testingConnection ? (
+                          <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Testing...</>
+                        ) : connectionStatus === 'success' ? (
+                          'Connected!'
+                        ) : connectionStatus === 'error' ? (
+                          'Failed'
+                        ) : (
+                          'Test Connection'
+                        )}
                       </button>
                     </div>
                   </div>

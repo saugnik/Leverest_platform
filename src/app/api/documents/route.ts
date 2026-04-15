@@ -30,14 +30,17 @@ export async function GET(request: NextRequest) {
       void user;
     }
 
-    // MOCK DATA FALLBACK
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const isMock = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz';
+
+    if (isMock) {
       const { MOCK_DOCUMENTS } = await import('@/lib/mock-data');
-      let docs = MOCK_DOCUMENTS;
+      let filtered = MOCK_DOCUMENTS;
       if (authorizedProjectId) {
-        docs = docs.filter(d => d.project_id === authorizedProjectId);
+        filtered = filtered.filter(d => d.project_id === authorizedProjectId);
       }
-      return NextResponse.json({ documents: docs });
+      return NextResponse.json({ documents: filtered });
     }
 
     const query = supabase
@@ -51,7 +54,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('[GET /api/documents] Supabase error:', error);
+      return NextResponse.json({ documents: [] });
+    }
 
     return NextResponse.json({ documents: data });
   } catch (err: unknown) {

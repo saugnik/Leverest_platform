@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_NOTIFICATIONS } from '@/lib/mock-data';
 import {
   LayoutDashboard, FolderKanban, Columns2, FileText, MessageSquare,
   Banknote, DollarSign, StickyNote, Activity, Users, Bell, LogOut,
@@ -72,7 +71,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const unread = MOCK_NOTIFICATIONS.filter(n => !n.is_read && n.user_id === user?.id).length;
+  const unread = 0;
   const visibleNav = NAV.filter(item => !item.roles || (user?.role && item.roles.includes(user.role)));
 
   // Group by section

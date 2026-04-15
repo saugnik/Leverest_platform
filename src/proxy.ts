@@ -9,9 +9,9 @@ import { getSpocFromRequest } from '@/lib/auth';
  * - Client:   /client/** (SPOC only, cookie session)
  */
 
-const PUBLIC_PATHS = ['/', '/api/auth/login', '/api/auth/logout', '/client/invite'];
+const PUBLIC_PATHS = ['/', '/api/auth/login', '/api/auth/logout', '/api/team', '/api/auth/spocs'];
 const CLIENT_PATHS = ['/client'];
-const INTERNAL_PATHS = ['/dashboard', '/api/projects', '/api/documents', '/api/queries', '/api/banks', '/api/notes', '/api/team', '/api/notifications'];
+const INTERNAL_PATHS = ['/dashboard', '/api/projects', '/api/documents', '/api/queries', '/api/banks', '/api/notes', '/api/notifications'];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
@@ -25,7 +25,7 @@ function isInternalPath(pathname: string) {
   return INTERNAL_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always allow public paths and static files

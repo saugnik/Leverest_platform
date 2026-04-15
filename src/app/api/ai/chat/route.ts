@@ -37,35 +37,7 @@ export async function POST(request: NextRequest) {
     // ── Fetch project data for AI context ──
     let projectContext: ProjectContext;
 
-    const cookieStore = await cookies();
-    const isMockMode =
-      cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' ||
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
 
-    if (isMockMode) {
-      const {
-        MOCK_PROJECTS,
-        MOCK_DOCUMENTS,
-        MOCK_QUERIES,
-        MOCK_NOTES,
-        MOCK_ACTIVITY_LOGS,
-      } = await import('@/lib/mock-data');
-
-      const project = MOCK_PROJECTS.find((p) => p.id === project_id);
-
-      // If no project found in mock data, create a minimal context
-      projectContext = {
-        project: project || { id: project_id, client_name: 'Project', stage: 'lead_received', company_type: 'mfg_service' },
-        documents: MOCK_DOCUMENTS.filter((d) => d.project_id === project_id),
-        queries: MOCK_QUERIES.filter((q) => q.project_id === project_id),
-        notes: MOCK_NOTES.filter((n) => n.project_id === project_id),
-        activity: MOCK_ACTIVITY_LOGS.filter((a) => a.project_id === project_id),
-        members: [],
-        spocs: [],
-      };
-    } else {
       const supabase = await createClient();
 
       const [
@@ -116,7 +88,7 @@ export async function POST(request: NextRequest) {
         members: membersRes.data || [],
         spocs: spocsRes.data || [],
       };
-    }
+
 
     // ── Chat with Gemini ──
     const chatHistory = messages.map((m: any) => ({

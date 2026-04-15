@@ -724,7 +724,7 @@ export default function LoginPage() {
           </div>
 
           <p style={{ textAlign: 'center', fontSize: '0.65rem', color: '#2D3F55', marginTop: '20px' }}>
-            © 2025 Leverest Fintech Pvt. Ltd. · Kolkata Branch
+            © 2026 Leverest Fintech Pvt. Ltd. · Kolkata Branch
           </p>
         </div>
       </div>

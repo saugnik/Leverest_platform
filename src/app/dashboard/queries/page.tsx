@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { Plus, MessageSquare, CheckCircle2, Clock, AlertCircle, Search } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, AlertCircle, Search, Loader2, X } from 'lucide-react';
 
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function timeAgo(d: string) {
@@ -20,6 +20,10 @@ export default function QueriesPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [allQueries, setAllQueries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRaiseModal, setShowRaiseModal] = useState(false);
+  const [raising, setRaising] = useState(false);
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [newQuery, setNewQuery] = useState({ project_id: '', title: '', description: '', priority: 'normal' });
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'resolved'>('all');
   const [filterType, setFilterType] = useState('all');
@@ -59,19 +63,130 @@ export default function QueriesPage() {
     return projects.find(p => p.id === pid);
   }
 
+  async function handleRaiseQuery() {
+    if (!newQuery.project_id || !newQuery.title || !newQuery.description) return;
+    
+    setRaising(true);
+    try {
+      const res = await fetch('/api/queries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: newQuery.project_id,
+          title: newQuery.title,
+          description: newQuery.description,
+          source: 'internal',
+          priority: newQuery.priority,
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.query) {
+          setAllQueries(prev => [data.query, ...prev]);
+        }
+        setShowRaiseModal(false);
+        setNewQuery({ project_id: '', title: '', description: '', priority: 'normal' });
+      }
+    } catch (err) {
+      console.error('Failed to raise query:', err);
+    } finally {
+      setRaising(false);
+    }
+  }
+
+  async function handleResolve(queryId: string) {
+    setResolving(queryId);
+    try {
+      const res = await fetch(`/api/queries`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_id: queryId, status: 'resolved' }),
+      });
+      
+      if (res.ok) {
+        setAllQueries(prev => prev.map(q => q.id === queryId ? { ...q, status: 'resolved' } : q));
+      }
+    } catch (err) {
+      console.error('Failed to resolve query:', err);
+    } finally {
+      setResolving(null);
+    }
+  }
+
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading queries...</div>;
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading queries...
+      </div>
+    );
   }
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
+      {/* Raise Query Modal */}
+      {showRaiseModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: '520px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>Raise New Query</div>
+              <button onClick={() => setShowRaiseModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Project *</label>
+                <select value={newQuery.project_id} onChange={e => setNewQuery(p => ({ ...p, project_id: e.target.value }))} className="field">
+                  <option value="">Select project...</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.company_name || p.client_name}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Query Title *</label>
+                <input type="text" value={newQuery.title} onChange={e => setNewQuery(p => ({ ...p, title: e.target.value }))} className="field" placeholder="Brief summary of the query" />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Description *</label>
+                <textarea value={newQuery.description} onChange={e => setNewQuery(p => ({ ...p, description: e.target.value }))} className="field" style={{ minHeight: '100px' }} placeholder="Detailed description of the query..." />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Priority</label>
+                <select value={newQuery.priority} onChange={e => setNewQuery(p => ({ ...p, priority: e.target.value }))} className="field" style={{ width: 'auto' }}>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowRaiseModal(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!newQuery.project_id || !newQuery.title || !newQuery.description || raising} onClick={handleRaiseQuery}>
+                {raising ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Raising...</> : <><Plus size={14} /> Raise Query</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
         <div>
           <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>Queries</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '3px' }}>{filtered.length} of {allQueries.length} shown</div>
         </div>
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setShowRaiseModal(true)}>
           <Plus size={14} /> Raise Query
         </button>
       </div>
@@ -162,8 +277,18 @@ export default function QueriesPage() {
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         {q.status !== 'resolved' && (
-                          <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={11} /> Resolve
+                          <button 
+                            className="btn btn-ghost btn-sm" 
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                            disabled={resolving === q.id}
+                            onClick={() => handleResolve(q.id)}
+                          >
+                            {resolving === q.id ? (
+                              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                            ) : (
+                              <CheckCircle2 size={11} />
+                            )}
+                            Resolve
                           </button>
                         )}
                       </div>

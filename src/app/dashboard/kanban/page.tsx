@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_PROJECTS, getProjectsByUser, formatCurrency, getProjectDocCompletionPercent } from '@/lib/mock-data';
+import { formatCurrency } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 
-function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
+function getInitials(n: string) { return n?.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase() || '?'; }
 function getGrad(name: string) {
   const g = ['linear-gradient(135deg,#C9960C,#8B5CF6)', 'linear-gradient(135deg,#3B82F6,#06B6D4)', 'linear-gradient(135deg,#22C55E,#059669)', 'linear-gradient(135deg,#F97316,#EF4444)'];
-  return g[name.charCodeAt(0) % g.length];
+  return g[name?.charCodeAt(0) % g.length] || g[0];
 }
 function getScore(s: number) {
   if (s >= 75) return '#4ADE80'; if (s >= 55) return '#FCD34D'; return '#F87171';
@@ -17,17 +18,78 @@ function getScore(s: number) {
 
 export default function KanbanPage() {
   const { user } = useAuth();
-  const allProjects = getProjectsByUser(user?.email || '', user?.role || '');
-  const [projects, setProjects] = useState(allProjects);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [projectsRes, docsRes] = await Promise.all([
+          fetch('/api/projects'),
+          fetch('/api/documents'),
+        ]);
+        
+        const projectsData = await projectsRes.json();
+        const docsData = await docsRes.json();
+        
+        if (projectsData.projects) setProjects(projectsData.projects);
+        if (docsData.documents) setDocuments(docsData.documents);
+      } catch (err) {
+        console.error('Failed to load data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading kanban...
+      </div>
+    );
+  }
+
   function onDragStart(projectId: string) { setDragging(projectId); }
   function onDragEnd() { setDragging(null); setDragOver(null); }
-  function onDrop(stageId: string) {
+  
+  async function onDrop(stageId: string) {
     if (!dragging) return;
-    setProjects(prev => prev.map(p => p.id === dragging ? { ...p, stage: stageId as any } : p));
-    setDragging(null); setDragOver(null);
+    
+    const project = projects.find(p => p.id === dragging);
+    if (project && project.stage !== stageId) {
+      // Update locally first for immediate feedback
+      setProjects(prev => prev.map(p => p.id === dragging ? { ...p, stage: stageId } : p));
+      
+      // Persist to API
+      try {
+        await fetch(`/api/projects/${dragging}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: stageId }),
+        });
+      } catch (err) {
+        console.error('Failed to update project stage:', err);
+        // Revert on error
+        setProjects(prev => prev.map(p => p.id === dragging ? { ...p, stage: project.stage } : p));
+      }
+    }
+    
+    setDragging(null);
+    setDragOver(null);
+  }
+
+  function getDocCompletion(projectId: string) {
+    const projectDocs = documents.filter(d => d.project_id === projectId);
+    if (projectDocs.length === 0) return 0;
+    const received = projectDocs.filter(d => d.status === 'received').length;
+    return Math.round((received / projectDocs.length) * 100);
   }
 
   return (
@@ -94,8 +156,10 @@ export default function KanbanPage() {
 
               {/* Cards */}
               {stageProjects.map(p => {
-                const comp = getProjectDocCompletionPercent(p.id);
+                const comp = getDocCompletion(p.id);
                 const score = p.approval_score || 0;
+                const teamMembers = p.assigned_team || [];
+                
                 return (
                   <div
                     key={p.id}
@@ -142,7 +206,7 @@ export default function KanbanPage() {
                     {/* Footer */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid var(--bg-border)' }}>
                       <div style={{ display: 'flex', gap: '-4px' }}>
-                        {p.assigned_team.slice(0, 3).map(email => {
+                        {teamMembers.slice(0, 3).map((email: string) => {
                           const n = email.split('@')[0].replace('.', ' ');
                           return (
                             <div key={email} title={email} style={{ width: '18px', height: '18px', borderRadius: '50%', background: getGrad(email), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.48rem', fontWeight: 700, color: '#fff', border: '1px solid var(--bg-card)', marginLeft: '-3px' }}>

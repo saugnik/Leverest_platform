@@ -1,32 +1,73 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import { MOCK_SPOCS, MOCK_ACTIVITY_LOGS, MOCK_PROJECTS } from '@/lib/mock-data';
 import { PIPELINE_STAGES } from '@/lib/types';
+import { getDynamicSpocs, getDynamicProjects } from '@/lib/dynamic';
+import { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 
 function fmtDateTime(d: string) { return new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-function timeAgo(d: string) {
-  const diff = Date.now() - new Date(d).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
 
 const ACTION_ICONS: Record<string, string> = {
   stage_updated: '🔄', document_uploaded: '📄', bank_suggested: '🏦',
   query_raised: '❓', bank_selected: '✅', note_added: '📝',
+  project_created: '✨', query_resolved: '✅',
 };
 
 export default function ClientTimelinePage() {
   const { user } = useAuth();
-  const spoc = MOCK_SPOCS.find(s => s.email === user?.email);
-  const project = spoc ? MOCK_PROJECTS.find(p => p.id === spoc.project_id) : null;
-  const logs = MOCK_ACTIVITY_LOGS.filter(l => l.project_id === spoc?.project_id)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const spoc = getDynamicSpocs().find(s => s.email === user?.email);
+  const project = spoc ? (getDynamicProjects() as any[]).find(p => p.id === spoc.project_id) : null;
+
+  useEffect(() => {
+    async function loadActivity() {
+      if (!spoc?.project_id) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/projects/activity?ids=${spoc.project_id}&limit=50`);
+        if (res.ok) {
+          const data = await res.json();
+          setLogs(data.logs || []);
+        }
+      } catch (err) {
+        console.error('Failed to load activity:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    if (spoc) {
+      loadActivity();
+    } else {
+      setLoading(false);
+    }
+  }, [spoc]);
 
   const currentStageIdx = PIPELINE_STAGES.findIndex(s => s.id === project?.stage);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading timeline...
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
+        No project assigned.
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '1.75rem 2rem', maxWidth: '860px' }} className="fade-up">
@@ -81,11 +122,11 @@ export default function ClientTimelinePage() {
           <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{logs.length} events</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {logs.map((log, i) => {
+          {logs.map((log: any, i: number) => {
             const isLast = i === logs.length - 1;
+            const performer = log.performed_by || 'System';
             return (
               <div key={log.id} style={{ display: 'flex', gap: '14px', paddingBottom: isLast ? 0 : '16px' }}>
-                {/* Timeline line */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
                   <div style={{
                     width: '32px', height: '32px', borderRadius: '50%',
@@ -97,22 +138,22 @@ export default function ClientTimelinePage() {
                   </div>
                   {!isLast && <div style={{ flex: 1, width: '1px', background: 'var(--bg-border)', marginTop: '4px' }} />}
                 </div>
-                {/* Content */}
                 <div style={{ flex: 1, paddingBottom: isLast ? 0 : '2px' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 500, lineHeight: 1.5 }}>{log.description}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 500, lineHeight: 1.5 }}>{log.description || log.action?.replace(/_/g, ' ')}</div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <span style={{ fontSize: '0.66rem', color: 'var(--text-3)' }}>{log.performed_by_name}</span>
+                    <span style={{ fontSize: '0.66rem', color: 'var(--text-3)' }}>{performer}</span>
                     <span style={{ fontSize: '0.66rem', color: 'var(--text-4)' }}>·</span>
                     <span style={{ fontSize: '0.66rem', color: 'var(--text-4)' }}>{fmtDateTime(log.created_at)}</span>
-                    <span style={{ fontSize: '0.66rem', color: 'var(--text-4)' }}>·</span>
-                    <span style={{ fontSize: '0.66rem', color: 'var(--text-3)' }}>{timeAgo(log.created_at)}</span>
                   </div>
                 </div>
               </div>
             );
           })}
           {logs.length === 0 && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>No activity yet.</div>
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: '0.88rem', marginBottom: '4px' }}>No activity yet.</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>Activity will appear here as your deal progresses.</div>
+            </div>
           )}
         </div>
       </div>

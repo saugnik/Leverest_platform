@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { Search, Upload, ExternalLink, FileText } from 'lucide-react';
+import { Search, Upload, ExternalLink, FileText, Loader2, X, Plus } from 'lucide-react';
 
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
 
@@ -12,11 +12,17 @@ export default function DocumentsPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [allDocs, setAllDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [uploading, setUploading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ project_id: '', document_name: '', category: '', file: null as File | null });
+  
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
+  
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const uploadFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -54,8 +60,85 @@ export default function DocumentsPage() {
   const required = allDocs.filter((d: any) => d.status === 'required').length;
   const pct = allDocs.length ? Math.round((received / allDocs.length) * 100) : 0;
 
+  async function handleGlobalUpload() {
+    if (!uploadForm.project_id || !uploadForm.document_name || !uploadForm.category || !uploadForm.file) return;
+    
+    setUploading(true);
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: uploadForm.project_id,
+          document_name: uploadForm.document_name,
+          category: uploadForm.category,
+          status: 'received',
+          file_url: URL.createObjectURL(uploadForm.file),
+          file_name: uploadForm.file.name,
+          file_source: 'manual',
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.document) {
+          setAllDocs(prev => [data.document, ...prev]);
+        }
+        setShowUploadModal(false);
+        setUploadForm({ project_id: '', document_name: '', category: '', file: null });
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRowUpload(docId: string) {
+    const input = fileInputRefs.current[docId];
+    if (!input || !input.files || !input.files.length) return;
+    
+    const file = input.files[0];
+    setUploading(true);
+    
+    try {
+      const doc = allDocs.find(d => d.id === docId);
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: doc?.project_id,
+          document_name: doc?.document_name,
+          category: doc?.category,
+          status: 'received',
+          file_url: URL.createObjectURL(file),
+          file_name: file.name,
+          file_source: 'manual',
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.document) {
+          setAllDocs(prev => [...prev, data.document]);
+        }
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+      if (input) input.value = '';
+    }
+  }
+
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading documents...</div>;
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading documents...
+      </div>
+    );
   }
 
   return (
@@ -66,10 +149,70 @@ export default function DocumentsPage() {
           <div style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-1)' }}>Documents</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '3px' }}>Global document manager — {filtered.length} of {allDocs.length} shown</div>
         </div>
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setShowUploadModal(true)}>
           <Upload size={14} /> Upload Document
         </button>
       </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: '480px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>Upload Document</div>
+              <button onClick={() => setShowUploadModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Project *</label>
+                <select value={uploadForm.project_id} onChange={e => setUploadForm(p => ({ ...p, project_id: e.target.value }))} className="field">
+                  <option value="">Select project...</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.company_name || p.client_name}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Document Name *</label>
+                <input type="text" value={uploadForm.document_name} onChange={e => setUploadForm(p => ({ ...p, document_name: e.target.value }))} className="field" placeholder="e.g., Certificate of Incorporation" />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Category *</label>
+                <select value={uploadForm.category} onChange={e => setUploadForm(p => ({ ...p, category: e.target.value }))} className="field">
+                  <option value="">Select category...</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>File *</label>
+                <input type="file" ref={uploadFileRef} onChange={e => setUploadForm(p => ({ ...p, file: e.target.files?.[0] || null }))} className="field" style={{ padding: '8px' }} />
+              </div>
+              
+              {uploadForm.file && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                  Selected: {uploadForm.file.name}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowUploadModal(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!uploadForm.project_id || !uploadForm.document_name || !uploadForm.category || !uploadForm.file || uploading} onClick={handleGlobalUpload}>
+                {uploading ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Uploading...</> : <><Upload size={14} /> Upload</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="grid-4" style={{ marginBottom: '1.25rem' }}>
@@ -164,9 +307,16 @@ export default function DocumentsPage() {
                     </td>
                     <td>
                       {doc.status !== 'received' && (
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.72rem', color: 'var(--gold)', border: '1px solid var(--gold-border)', borderRadius: '5px', padding: '3px 8px', background: 'var(--gold-dim)' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.72rem', color: 'var(--gold)', border: '1px solid var(--gold-border)', borderRadius: '5px', padding: '3px 8px', background: 'var(--gold-dim)' }}>
                           <Upload size={11} /> Upload
-                          <input type="file" style={{ display: 'none' }} />
+                          <input 
+                            ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                            type="file" 
+                            style={{ display: 'none' }} 
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={() => handleRowUpload(doc.id)}
+                            disabled={uploading}
+                          />
                         </label>
                       )}
                     </td>

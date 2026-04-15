@@ -1,7 +1,8 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import { MOCK_USERS, MOCK_SPOCS } from '@/lib/mock-data';
+import { MOCK_USERS } from '@/lib/mock-data';
+import { getDynamicSpocs } from '@/lib/dynamic';
 import { Mail, Phone, UserCheck } from 'lucide-react';
 
 function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
@@ -143,7 +144,7 @@ export default function TeamPage() {
               </div>
             </div>
             <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', background: 'rgba(255,255,255,0.04)', padding: '3px 10px', borderRadius: '99px' }}>
-              {MOCK_SPOCS.length} SPOCs
+              {getDynamicSpocs().length} SPOCs
             </div>
           </div>
           <div className="tbl-wrap">
@@ -159,7 +160,7 @@ export default function TeamPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_SPOCS.map(s => {
+                {getDynamicSpocs().map(s => {
                   const proj = s.project_id;
                   return (
                     <tr key={s.id}>

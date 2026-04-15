@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_NOTIFICATIONS, MOCK_PROJECTS } from '@/lib/mock-data';
-import { Bell, FileText, MessageSquare, Banknote, Clock, CheckCircle2 } from 'lucide-react';
+import { Bell, FileText, MessageSquare, Banknote, Clock, CheckCircle2, Loader2 } from 'lucide-react';
 
 function timeAgo(d: string) {
   const diff = Date.now() - new Date(d).getTime();
@@ -27,16 +26,62 @@ function getTypeIcon(type: string) {
 
 export default function NotificationsPage() {
   const { user } = useAuth();
-  const [notifs, setNotifs] = useState(MOCK_NOTIFICATIONS.filter(n => n.user_id === user?.id));
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const unread = notifs.filter(n => !n.is_read).length;
 
-  function markAll() {
-    setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
+  useEffect(() => {
+    async function loadNotifications() {
+      try {
+        const res = await fetch('/api/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          setNotifs(data.notifications || []);
+        }
+      } catch (err) {
+        console.error('Failed to load notifications:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadNotifications();
+  }, []);
+
+  async function markAll() {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mark_all: true }),
+      });
+      setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+    }
   }
 
-  function markOne(id: string) {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+  async function markOne(id: string) {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_id: id }),
+      });
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading notifications...
+      </div>
+    );
   }
 
   return (
@@ -59,6 +104,7 @@ export default function NotificationsPage() {
         <div className="card" style={{ padding: '4rem', textAlign: 'center' }}>
           <Bell size={32} color="var(--text-4)" style={{ margin: '0 auto 12px' }} />
           <div style={{ color: 'var(--text-3)', fontSize: '0.88rem' }}>No notifications yet.</div>
+          <div style={{ color: 'var(--text-4)', fontSize: '0.75rem', marginTop: '4px' }}>You'll receive notifications when important events occur.</div>
         </div>
       ) : (
         <div className="card">
@@ -69,7 +115,6 @@ export default function NotificationsPage() {
                   <th style={{ width: '36px' }}></th>
                   <th>Notification</th>
                   <th>Type</th>
-                  <th>Project</th>
                   <th>Time</th>
                   <th></th>
                 </tr>
@@ -77,7 +122,6 @@ export default function NotificationsPage() {
               <tbody>
                 {notifs.map(n => {
                   const { icon: Icon, color, bg } = getTypeIcon(n.type);
-                  const proj = MOCK_PROJECTS.find(p => p.id === n.project_id);
                   return (
                     <tr key={n.id} style={{ opacity: n.is_read ? 0.6 : 1 }}>
                       <td>
@@ -96,8 +140,7 @@ export default function NotificationsPage() {
                           </div>
                         </div>
                       </td>
-                      <td><span className="pill pill-slate" style={{ fontSize: '0.65rem', textTransform: 'capitalize' }}>{n.type}</span></td>
-                      <td style={{ fontSize: '0.74rem', color: 'var(--gold)' }}>{proj?.company_name || '—'}</td>
+                      <td><span className="pill pill-slate" style={{ fontSize: '0.65rem', textTransform: 'capitalize' }}>{n.type || 'system'}</span></td>
                       <td style={{ fontSize: '0.7rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{timeAgo(n.created_at)}</td>
                       <td>
                         {!n.is_read && (

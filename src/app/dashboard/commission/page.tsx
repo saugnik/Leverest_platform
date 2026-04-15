@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_PROJECTS, getProjectsByUser, formatCurrency } from '@/lib/mock-data';
+import { formatCurrency } from '@/lib/utils';
 import { canViewFinanceData } from '@/lib/utils';
 
 function getStageLabel(s: string) {
@@ -20,6 +21,15 @@ const COMMISSION_STATS = [
 export default function CommissionPage() {
   const { user } = useAuth();
   const canSee = canViewFinanceData(user?.role);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/projects').then(r => r.json()).then(d => {
+      if (d.projects) setProjects(d.projects);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
 
   if (!canSee) {
     return (
@@ -30,7 +40,8 @@ export default function CommissionPage() {
     );
   }
 
-  const projects = getProjectsByUser(user?.email || '', user?.role || '');
+  if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>Loading...</div>;
+
   // ONLY show finished deals (approved) that have a commission amount as requested
   const dealProjects = projects.filter(p => p.stage === 'approved' && p.commission_amount);
 

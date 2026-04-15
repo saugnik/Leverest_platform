@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_USERS } from '@/lib/mock-data';
 import { Download, Plus, DollarSign, TrendingUp, Banknote, Calendar } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 
@@ -18,6 +17,7 @@ export default function FinancePage() {
   const [finances, setFinances] = useState<any[]>([]);
   const [salaries, setSalaries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [MOCK_USERS, setUsers] = useState<any[]>([]);
 
   // Forms
   const [fMonth, setFMonth] = useState('January');
@@ -32,9 +32,13 @@ export default function FinancePage() {
   const [sStatus, setSStatus] = useState('Unpaid');
 
   useEffect(() => {
-    fetch('/api/finance').then(r => r.json()).then(d => {
+    Promise.all([
+      fetch('/api/finance').then(r => r.json()),
+      fetch('/api/team').then(r => r.json())
+    ]).then(([d, teamData]) => {
       setFinances(d.finances || []);
       setSalaries(d.salaries || []);
+      if (teamData.members) setUsers(teamData.members);
       setLoading(false);
     }).catch(console.error);
   }, []);

@@ -1,19 +1,16 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import {
-  MOCK_PROJECTS, MOCK_ACTIVITY_LOGS, getProjectsByUser,
-  formatCurrency, getProjectDocCompletionPercent
-} from '@/lib/mock-data';
+import { formatCurrency } from '@/lib/utils';
 import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
-import { TrendingUp, FolderKanban, CheckCircle2, DollarSign, AlertTriangle, ChevronRight, Clock, ExternalLink, Calendar, Users, Plane, Briefcase, X, Plus, Trash2, Edit3 } from 'lucide-react';
+import { TrendingUp, FolderKanban, CheckCircle2, DollarSign, AlertTriangle, ChevronRight, Clock, ExternalLink, Calendar, Users, Plane, Briefcase, X, Plus, Trash2, Edit3, Loader2 } from 'lucide-react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -99,7 +96,7 @@ type Candidate = { id: string; name: string; role: string; status: string; added
 type CalEvent = { id: string; title: string; start: string; end: string; backgroundColor: string };
 
 // ─── EA Dashboard Component ─────────────────────────────────────────────────
-function EADashboard({ user, projects, router }: { user: any; projects: any[]; router: any }) {
+function EADashboard({ user, projects, activityLogs, router }: { user: any; projects: any[]; activityLogs: any[]; router: any }) {
   const stuckProjects = projects.filter((p: any) => ['documents_requested', 'internal_processing'].includes(p.stage));
 
   // ── Candidates state ──
@@ -287,7 +284,6 @@ function EADashboard({ user, projects, router }: { user: any; projects: any[]; r
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {stuckProjects.map((p: any) => {
-                    const comp = getProjectDocCompletionPercent(p.id);
                     return (
                       <div key={p.id} style={{
                         padding: '12px 16px', borderBottom: '1px solid var(--bg-border)',
@@ -313,10 +309,6 @@ function EADashboard({ user, projects, router }: { user: any; projects: any[]; r
                             <Clock size={10} /> Stuck in: {getStageLabel(p.stage)}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FCD34D' }}>{comp}%</div>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-4)' }}>Docs</div>
-                        </div>
                       </div>
                     );
                   })}
@@ -333,31 +325,33 @@ function EADashboard({ user, projects, router }: { user: any; projects: any[]; r
               </div>
             </div>
             <div>
-              {MOCK_ACTIVITY_LOGS.length === 0 ? (
+              {activityLogs.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
                   No recent activity.
                 </div>
               ) : (
-                MOCK_ACTIVITY_LOGS.slice(0, 4).map((log, i) => {
-                  const isLast = i === Math.min(MOCK_ACTIVITY_LOGS.length, 4) - 1;
-                  return (
-                    <div key={log.id} style={{
-                      display: 'flex', gap: '10px', padding: '10px 16px',
-                      borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', lineHeight: 1.4 }}>{log.description}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{log.performed_by_name}</span>
-                          <span style={{ color: 'var(--text-4)', fontSize: '0.65rem' }}>·</span>
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-4)' }}>
-                            {new Date(log.created_at).toLocaleDateString()}
-                          </span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {activityLogs.slice(0, 4).map((log: any, i: number) => {
+                    const isLast = i === 0;
+                    return (
+                      <div key={log.id} style={{
+                        display: 'flex', gap: '10px', padding: '10px 16px',
+                        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', lineHeight: 1.4 }}>{log.description || log.action}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{log.performed_by}</span>
+                            <span style={{ color: 'var(--text-4)', fontSize: '0.65rem' }}>·</span>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-4)' }}>
+                              {new Date(log.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -542,6 +536,43 @@ function EADashboard({ user, projects, router }: { user: any; projects: any[]; r
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [queries, setQueries] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const [projectsRes, queriesRes, documentsRes] = await Promise.all([
+        fetch('/api/projects'),
+        fetch('/api/queries'),
+        fetch('/api/documents'),
+      ]);
+      
+      const projectsData = await projectsRes.json();
+      const queriesData = await queriesRes.json();
+      const documentsData = await documentsRes.json();
+      
+      if (projectsData.projects) setProjects(projectsData.projects);
+      if (queriesData.queries) setQueries(queriesData.queries);
+      if (documentsData.documents) setDocuments(documentsData.documents);
+      
+      // Fetch activity logs from projects
+      if (projectsData.projects && projectsData.projects.length > 0) {
+        const projectIds = projectsData.projects.map((p: any) => p.id);
+        const logsRes = await fetch(`/api/projects/activity?ids=${projectIds.join(',')}&limit=10`);
+        if (logsRes.ok) {
+          const logsData = await logsRes.json();
+          if (logsData.logs) setActivityLogs(logsData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.role === 'accounts') {
@@ -549,7 +580,10 @@ export default function DashboardPage() {
     }
   }, [user, router]);
 
-  const projects = getProjectsByUser(user?.email || '', user?.role || '');
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
   const canViewFinance = canViewFinanceData(user?.role);
 
   if (user?.role === 'accounts') {
@@ -557,7 +591,17 @@ export default function DashboardPage() {
   }
 
   if (user?.role === 'engagement_assistant') {
-    return <EADashboard user={user} projects={projects} router={router} />;
+    return <EADashboard user={user} projects={projects} activityLogs={activityLogs} router={router} />;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading dashboard...
+      </div>
+    );
   }
 
   const totalLoan      = projects.reduce((s, p) => s + (p.loan_amount || 0), 0);
@@ -566,8 +610,14 @@ export default function DashboardPage() {
   const totalComm      = projects.reduce((s, p) => s + (p.commission_amount || 0), 0);
   const needsAttention = projects.filter(p => (p.approval_score || 100) < 60);
 
-  const pendingQueries = 0; // Will be populated from real data
-  const docCompletion  = projects.length > 0 ? Math.round(projects.reduce((s, p) => s + getProjectDocCompletionPercent(p.id), 0) / projects.length) : 0;
+  // Calculate pending queries (open queries across all projects)
+  const pendingQueries = queries.filter(q => q.status === 'open').length;
+  
+  // Calculate average document completion
+  const projectIds = projects.map(p => p.id);
+  const relevantDocs = documents.filter(d => projectIds.includes(d.project_id));
+  const receivedDocs = relevantDocs.filter(d => d.status === 'received').length;
+  const docCompletion = relevantDocs.length > 0 ? Math.round((receivedDocs / relevantDocs.length) * 100) : 0;
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -677,11 +727,11 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="card-header-title">Pipeline Distribution</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{MOCK_PROJECTS.length} global</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{projects.length} global</div>
           </div>
           <div className="custom-scroll" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '190px', overflowY: 'auto' }}>
             {(() => {
-              const allCompanyProjects = MOCK_PROJECTS; // Aggregate company-wide
+              const allCompanyProjects = projects;
 
               const counts = PIPELINE_STAGES.map((s) => ({
                 id: s.id,
@@ -752,7 +802,9 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {projects.map((p) => {
-                    const comp = getProjectDocCompletionPercent(p.id);
+                    const projectDocs = documents.filter(d => d.project_id === p.id);
+                    const receivedDocs = projectDocs.filter(d => d.status === 'received').length;
+                    const comp = projectDocs.length > 0 ? Math.round((receivedDocs / projectDocs.length) * 100) : 0;
                     const score = p.approval_score || 0;
                     const sc = getScore(score);
                     return (
@@ -855,38 +907,44 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div>
-              {MOCK_ACTIVITY_LOGS.slice(0, 5).map((log, i) => {
-                const proj = MOCK_PROJECTS.find((p) => p.id === log.project_id);
-                const isLast = i === MOCK_ACTIVITY_LOGS.slice(0, 5).length - 1;
-                return (
-                  <div key={log.id} style={{
-                    display: 'flex', gap: '10px',
-                    padding: '10px 16px',
-                    borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
-                  }}>
-                    <div style={{
-                      width: '26px', height: '26px', borderRadius: '50%',
-                      background: getGrad(log.performed_by_name),
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.58rem', fontWeight: 700, color: '#fff', flexShrink: 0,
+              {activityLogs.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
+                  No activity logs yet.
+                </div>
+              ) : (
+                activityLogs.slice(0, 5).map((log: any, i: number) => {
+                  const proj = projects.find((p) => p.id === log.project_id);
+                  const isLast = i === 0;
+                  return (
+                    <div key={log.id} style={{
+                      display: 'flex', gap: '10px',
+                      padding: '10px 16px',
+                      borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
                     }}>
-                      {getInitials(log.performed_by_name)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', lineHeight: 1.4 }}>{log.description}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{log.performed_by_name}</span>
-                        {proj && (
-                          <>
-                            <span style={{ color: 'var(--text-4)', fontSize: '0.65rem' }}>·</span>
-                            <span style={{ fontSize: '0.65rem', color: 'var(--gold)' }}>{proj.company_name}</span>
-                          </>
-                        )}
+                      <div style={{
+                        width: '26px', height: '26px', borderRadius: '50%',
+                        background: getGrad(log.performed_by || 'Unknown'),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.58rem', fontWeight: 700, color: '#fff', flexShrink: 0,
+                      }}>
+                        {getInitials(log.performed_by || 'Unknown')}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', lineHeight: 1.4 }}>{log.description || log.action}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{log.performed_by}</span>
+                          {proj && (
+                            <>
+                              <span style={{ color: 'var(--text-4)', fontSize: '0.65rem' }}>·</span>
+                              <span style={{ fontSize: '0.65rem', color: 'var(--gold)' }}>{proj.company_name}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

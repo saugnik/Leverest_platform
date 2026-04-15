@@ -1,14 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_NOTES, MOCK_PROJECTS, getProjectsByUser } from '@/lib/mock-data';
-import { Lock, Plus, Send } from 'lucide-react';
+import { Lock, Plus, Send, Loader2 } from 'lucide-react';
 
-function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
+function getInitials(n: string) { return n?.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase() || '?'; }
 function getGrad(name: string) {
   const g = ['linear-gradient(135deg,#C9960C,#8B5CF6)', 'linear-gradient(135deg,#3B82F6,#06B6D4)', 'linear-gradient(135deg,#22C55E,#059669)', 'linear-gradient(135deg,#F97316,#EF4444)'];
-  return g[name.charCodeAt(0) % g.length];
+  return g[name?.charCodeAt(0) % g.length] || g[0];
 }
 function timeAgo(d: string) {
   const diff = Date.now() - new Date(d).getTime();
@@ -21,15 +20,73 @@ function timeAgo(d: string) {
 
 export default function NotesPage() {
   const { user } = useAuth();
-  const projects = getProjectsByUser(user?.email || '', user?.role || '');
-  const projectIds = projects.map(p => p.id);
-  const allNotes = MOCK_NOTES.filter(n => projectIds.includes(n.project_id));
-
+  const [projects, setProjects] = useState<any[]>([]);
+  const [allNotes, setAllNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [filterProject, setFilterProject] = useState('all');
   const [newNote, setNewNote] = useState('');
   const [newNoteProject, setNewNoteProject] = useState('');
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [projectsRes, notesRes] = await Promise.all([
+          fetch('/api/projects'),
+          fetch('/api/notes'),
+        ]);
+        
+        const projectsData = await projectsRes.json();
+        const notesData = await notesRes.json();
+        
+        if (projectsData.projects) setProjects(projectsData.projects);
+        if (notesData.notes) setAllNotes(notesData.notes);
+      } catch (err) {
+        console.error('Failed to load data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  async function addNote() {
+    if (!newNote.trim() || !newNoteProject) return;
+    
+    setSaving(true);
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: newNoteProject, note: newNote }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.note) {
+          setAllNotes(prev => [data.note, ...prev]);
+          setNewNote('');
+          setNewNoteProject('');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to add note:', err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const filtered = filterProject === 'all' ? allNotes : allNotes.filter(n => n.project_id === filterProject);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading notes...
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '1.75rem 2rem' }} className="fade-up">
@@ -72,37 +129,41 @@ export default function NotesPage() {
           <button
             className="btn btn-primary btn-sm"
             style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-            disabled={!newNote.trim() || !newNoteProject}
+            disabled={!newNote.trim() || !newNoteProject || saving}
+            onClick={addNote}
           >
-            <Send size={12} /> Add Note
+            {saving ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+            {saving ? 'Adding...' : 'Add Note'}
           </button>
         </div>
       </div>
 
       {/* Notes grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
-        {filtered.map(note => {
+        {filtered.map((note: any) => {
           const proj = projects.find(p => p.id === note.project_id);
+          const creator = note.created_by || 'Unknown';
           return (
             <div key={note.id} className="card" style={{ padding: '16px' }}>
               {/* Project badge */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span className="pill pill-gold" style={{ fontSize: '0.65rem' }}>{proj?.company_name}</span>
+                <span className="pill pill-gold" style={{ fontSize: '0.65rem' }}>{proj?.company_name || 'Unknown Project'}</span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-4)' }}>{timeAgo(note.created_at)}</span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-1)', lineHeight: 1.7 }}>{note.content}</p>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-1)', lineHeight: 1.7 }}>{note.note || note.content}</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--bg-border)' }}>
-                <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: getGrad(note.created_by_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, color: '#fff' }}>
-                  {getInitials(note.created_by_name)}
+                <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: getGrad(creator), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, color: '#fff' }}>
+                  {getInitials(creator)}
                 </div>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{note.created_by_name}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{creator}</span>
               </div>
             </div>
           );
         })}
         {filtered.length === 0 && (
           <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', gridColumn: '1/-1' }}>
-            No notes found. Add your first internal note above.
+            <div style={{ fontSize: '0.88rem', marginBottom: '4px' }}>No notes found.</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>Add your first internal note above.</div>
           </div>
         )}
       </div>

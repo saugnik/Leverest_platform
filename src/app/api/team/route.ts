@@ -6,13 +6,9 @@ import { createClient } from '@/lib/supabase/server';
 export async function GET() {
   try {
     await requireAuth();
-
-    // MOCK DATA FALLBACK
     const { cookies } = await import('next/headers');
     const cookieStore = await cookies();
-    const isMockMode = cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz' || !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy');
-    
-    if (isMockMode) {
+    if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
       const { MOCK_USERS } = await import('@/lib/mock-data');
       return NextResponse.json({ members: MOCK_USERS });
     }
@@ -25,7 +21,10 @@ export async function GET() {
       .order('role')
       .order('name');
 
-    if (error) throw error;
+    if (error) {
+      console.error('[GET /api/team] Supabase error:', error);
+      return NextResponse.json({ members: [] });
+    }
     return NextResponse.json({ members: data });
   } catch (err: unknown) {
     const error = err as Error;

@@ -5,10 +5,24 @@ import { useRouter } from 'next/navigation';
 import { verifyOtp, savePasswordOverride } from '@/lib/dynamic';
 import { MOCK_USERS } from '@/lib/mock-data';
 import { getDynamicSpocs } from '@/lib/dynamic';
-import { Mail, Lock, KeyRound, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, KeyRound, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 type Step = 'email' | 'otp' | 'password' | 'success';
+
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  
+  if (score <= 2) return { score: 1, label: 'Weak', color: '#EF4444' };
+  if (score <= 4) return { score: 2, label: 'Medium', color: '#F59E0B' };
+  return { score: 3, label: 'Strong', color: '#22C55E' };
+}
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<Step>('email');
@@ -227,6 +241,46 @@ export default function ForgotPasswordPage() {
                     autoFocus
                   />
                 </div>
+                {newPassword && (
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                      {[1, 2, 3].map((level) => (
+                        <div key={level} style={{
+                          flex: 1, height: '4px', borderRadius: '2px',
+                          background: getPasswordStrength(newPassword).score >= level 
+                            ? getPasswordStrength(newPassword).color 
+                            : 'rgba(255,255,255,0.1)',
+                          transition: 'background 0.2s',
+                        }} />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: getPasswordStrength(newPassword).color }}>
+                        {getPasswordStrength(newPassword).label}
+                      </span>
+                      <span style={{ fontSize: '0.62rem', color: '#2D3F55' }}>
+                        Min 8 characters
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {[
+                        { label: 'Uppercase', valid: /[A-Z]/.test(newPassword) },
+                        { label: 'Lowercase', valid: /[a-z]/.test(newPassword) },
+                        { label: 'Number', valid: /[0-9]/.test(newPassword) },
+                        { label: 'Special', valid: /[^A-Za-z0-9]/.test(newPassword) },
+                      ].map(({ label, valid }) => (
+                        <span key={label} style={{
+                          fontSize: '0.6rem', padding: '2px 6px', borderRadius: '4px',
+                          background: valid ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
+                          color: valid ? '#22C55E' : '#2D3F55',
+                          border: `1px solid ${valid ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                        }}>
+                          {valid ? '✓ ' : '○ '}{label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="field-label">Confirm Password</label>
@@ -238,12 +292,20 @@ export default function ForgotPasswordPage() {
                     placeholder="••••••••"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    style={{ paddingLeft: '40px' }}
+                    style={{ 
+                      paddingLeft: '40px',
+                      borderColor: confirmPassword && newPassword !== confirmPassword ? 'rgba(239,68,68,0.5)' : undefined,
+                    }}
                   />
                 </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <div style={{ marginTop: '6px', fontSize: '0.68rem', color: '#EF4444' }}>
+                    Passwords do not match
+                  </div>
+                )}
               </div>
               <button type="submit" className="btn btn-primary" disabled={loading} style={{ height: '44px', width: '100%', justifyContent: 'center' }}>
-                {loading ? 'Updating...' : 'Reset Password'}
+                {loading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Updating...</> : 'Reset Password'}
               </button>
             </form>
           )}

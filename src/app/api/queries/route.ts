@@ -17,30 +17,28 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (spoc) {
-      // MOCK DATA FALLBACK
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
-        const { MOCK_QUERIES } = await import('@/lib/mock-data');
-        return NextResponse.json({ queries: MOCK_QUERIES.filter(q => q.project_id === spoc.project_id) });
-      }
-
       // SPOC only sees their project's queries
       query = query.eq('project_id', spoc.project_id);
     } else {
       const user = await requireAuth();
 
-      // MOCK DATA FALLBACK
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project-ref') || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      if (cookieStore.get('sb-auth-token')?.value === 'mock-token-xyz') {
         const { MOCK_QUERIES } = await import('@/lib/mock-data');
-        let qrs = MOCK_QUERIES;
-        if (projectId) qrs = qrs.filter(q => q.project_id === projectId);
-        return NextResponse.json({ queries: qrs });
+        let filtered = MOCK_QUERIES;
+        if (projectId) filtered = filtered.filter(q => q.project_id === projectId);
+        return NextResponse.json({ queries: filtered });
       }
 
       if (projectId) query = query.eq('project_id', projectId);
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('[GET /api/queries] Supabase error:', error);
+      return NextResponse.json({ queries: [] });
+    }
 
     return NextResponse.json({ queries: data });
   } catch (err: unknown) {

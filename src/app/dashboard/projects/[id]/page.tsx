@@ -2,9 +2,7 @@
 
 import { useState, use, useEffect } from 'react';
 import { useAuth } from '@/context/auth-context';
-import {
-  getProjectDocCompletionPercent, formatCurrency,
-} from '@/lib/mock-data';
+import { formatCurrency } from '@/lib/utils';
 import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
@@ -13,7 +11,7 @@ import {
   ArrowLeft, FileText, MessageSquare, StickyNote, Activity,
   CheckCircle2, Clock, AlertCircle, Upload, ExternalLink, Plus, Send,
   Phone, Mail, TrendingUp, Edit3, Check, MessageCircle, Lock, Brain,
-  FolderDown, Flag, X, Save, Users,
+  FolderDown, Flag, X, Save, Users, Loader2,
 } from 'lucide-react';
 
 type Tab = 'overview' | 'timeline' | 'documents' | 'queries' | 'notes' | 'activity';
@@ -72,6 +70,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [showQueryModal, setShowQueryModal] = useState(false);
   const [queryForm, setQueryForm] = useState({ title: '', description: '' });
   const [isRaising, setIsRaising] = useState(false);
+
+  // Note Submission State
+  const [isAddingNote, setIsAddingNote] = useState(false);
+
+  // Upload State
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ document_name: '', category: '', file: null as File | null });
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Resolve Query State
+  const [resolvingQuery, setResolvingQuery] = useState<string | null>(null);
 
   const openEditModal = async () => {
     if (!data?.project) return;
@@ -189,6 +198,88 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return;
+    setIsAddingNote(true);
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: id, note: newNote }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.note) {
+          setData((prev: any) => ({
+            ...prev,
+            notes: [data.note, ...(prev?.notes || [])],
+          }));
+        }
+        setNewNote('');
+      }
+    } catch (err) {
+      console.error('Failed to add note:', err);
+    } finally {
+      setIsAddingNote(false);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadForm.document_name || !uploadForm.category || !uploadForm.file) return;
+    setIsUploading(true);
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: id,
+          document_name: uploadForm.document_name,
+          category: uploadForm.category,
+          status: 'received',
+          file_url: URL.createObjectURL(uploadForm.file),
+          file_name: uploadForm.file.name,
+          file_source: 'manual',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.document) {
+          setData((prev: any) => ({
+            ...prev,
+            documents: [...(prev?.documents || []), data.document],
+          }));
+        }
+        setShowUploadModal(false);
+        setUploadForm({ document_name: '', category: '', file: null });
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleResolveQuery = async (queryId: string) => {
+    setResolvingQuery(queryId);
+    try {
+      const res = await fetch('/api/queries', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_id: queryId, status: 'resolved' }),
+      });
+      if (res.ok) {
+        setData((prev: any) => ({
+          ...prev,
+          queries: prev?.queries?.map((q: any) => q.id === queryId ? { ...q, status: 'resolved' } : q),
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to resolve query:', err);
+    } finally {
+      setResolvingQuery(null);
+    }
+  };
+
   useEffect(() => {
     fetch(`/api/projects/${id}`)
       .then(res => res.json())
@@ -217,7 +308,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     </div>
   );
 
-  const completion = getProjectDocCompletionPercent(project.id);
+  const completion = checklist.length > 0 ? Math.round(checklist.filter((d: any) => d.status === 'received').length / checklist.length * 100) : 0;
   const score = project.approval_score || 0;
   const scoreColor = score >= 75 ? '#4ADE80' : score >= 55 ? '#FCD34D' : '#F87171';
 
@@ -513,7 +604,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowDriveModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(59,130,246,0.1)', color: '#3B82F6', border: '1px solid rgba(59,130,246,0.2)' }}>
                   <FolderDown size={12} /> Import from Drive
                 </button>
-                <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }} onClick={() => setShowUploadModal(true)}>
                   <Upload size={12} /> Upload
                 </button>
               </div>
@@ -594,8 +685,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         <td style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{fmtDate(q.created_at)}</td>
                         <td>
                           {q.status !== 'resolved' && (
-                            <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Check size={11} /> Resolve
+                            <button 
+                              className="btn btn-ghost btn-sm" 
+                              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                              disabled={resolvingQuery === q.id}
+                              onClick={() => handleResolveQuery(q.id)}
+                            >
+                              {resolvingQuery === q.id ? (
+                                <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <Check size={11} />
+                              )}
+                              Resolve
                             </button>
                           )}
                         </td>
@@ -620,8 +721,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <textarea placeholder="Add an internal note…" value={newNote} onChange={e => setNewNote(e.target.value)} className="field" style={{ minHeight: '72px', marginBottom: '10px' }} />
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }} disabled={!newNote.trim()}>
-                    <Send size={12} /> Add Note
+                  <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px' }} disabled={!newNote.trim() || isAddingNote} onClick={handleAddNote}>
+                    {isAddingNote ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Adding...</> : <><Send size={12} /> Add Note</>}
                   </button>
                 </div>
               </div>
@@ -693,6 +794,51 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <button className="btn btn-ghost" onClick={() => setShowDriveModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleDriveImport} disabled={isImporting || !driveLink}>
                 {isImporting ? 'Scanning with AI...' : 'Start Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '480px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Upload Document</h3>
+              <button onClick={() => setShowUploadModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Document Name *</label>
+                <input type="text" value={uploadForm.document_name} onChange={e => setUploadForm(p => ({ ...p, document_name: e.target.value }))} className="field" placeholder="e.g., Certificate of Incorporation" />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>Category *</label>
+                <select value={uploadForm.category} onChange={e => setUploadForm(p => ({ ...p, category: e.target.value }))} className="field">
+                  <option value="">Select category...</option>
+                  {[...new Set(docs.map((d: any) => d.category))].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>File *</label>
+                <input type="file" onChange={e => setUploadForm(p => ({ ...p, file: e.target.files?.[0] || null }))} className="field" style={{ padding: '8px' }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+              </div>
+              {uploadForm.file && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                  Selected: {uploadForm.file.name}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowUploadModal(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!uploadForm.document_name || !uploadForm.category || !uploadForm.file || isUploading} onClick={handleUpload}>
+                {isUploading ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Uploading...</> : <><Upload size={14} /> Upload</>}
               </button>
             </div>
           </div>

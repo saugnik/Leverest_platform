@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Playfair_Display, Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/auth-context';
+import { ToastProvider } from '@/components/toast';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -26,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
       <body style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif', background: '#03080F', color: '#EEF2FF' }}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1,17 +1,99 @@
 'use client';
 
 import { useAuth } from '@/context/auth-context';
-import { MOCK_SPOCS, MOCK_DOCUMENTS } from '@/lib/mock-data';
-import { Upload, ExternalLink, FileText, CheckCircle2 } from 'lucide-react';
+import { Upload, ExternalLink, FileText, CheckCircle2, Loader2 } from 'lucide-react';
+import { getDynamicSpocs } from '@/lib/dynamic';
+import { useState, useEffect, useRef } from 'react';
 
 export default function ClientDocumentsPage() {
   const { user } = useAuth();
-  const spoc = MOCK_SPOCS.find(s => s.email === user?.email);
-  const docs = MOCK_DOCUMENTS.filter(d => d.project_id === spoc?.project_id);
-  const categories = [...new Set(docs.map(d => d.category))];
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  const spoc = getDynamicSpocs().find(s => s.email === user?.email);
 
-  const received = docs.filter(d => d.status === 'received').length;
+  useEffect(() => {
+    async function loadDocuments() {
+      if (!spoc?.project_id) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/documents?project_id=${spoc.project_id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDocs(data.documents || []);
+        }
+      } catch (err) {
+        console.error('Failed to load documents:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    if (spoc) {
+      loadDocuments();
+    } else {
+      setLoading(false);
+    }
+  }, [spoc]);
+
+  async function handleUpload(docId: string) {
+    const input = fileInputRefs.current[docId];
+    if (!input || !input.files || !input.files.length || !spoc?.project_id) return;
+    
+    const file = input.files[0];
+    setUploading(docId);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // In a real implementation, you would upload to storage first
+      // For now, we'll simulate an upload and mark as received
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document_id: docId,
+          project_id: spoc.project_id,
+          file_url: URL.createObjectURL(file),
+          file_source: 'manual',
+        }),
+      });
+      
+      if (res.ok) {
+        // Update local state
+        setDocs(prev => prev.map(d => 
+          d.id === docId 
+            ? { ...d, status: 'received', file_url: URL.createObjectURL(file), file_name: file.name }
+            : d
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to upload document:', err);
+    } finally {
+      setUploading(null);
+      if (input) input.value = '';
+    }
+  }
+
+  const categories = [...new Set(docs.map((d: any) => d.category))];
+  const received = docs.filter((d: any) => d.status === 'received').length;
   const pct = docs.length ? Math.round((received / docs.length) * 100) : 0;
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        Loading documents...
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '1.75rem 2rem', maxWidth: '900px' }} className="fade-up">
@@ -29,24 +111,19 @@ export default function ClientDocumentsPage() {
           <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F0B429' }}>{pct}%</span>
         </div>
         <div className="progress-track lg"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
-        <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
-          {[
-            { label: 'Received', count: docs.filter(d => d.status === 'received').length, color: '#4ADE80' },
-            { label: 'Pending', count: docs.filter(d => d.status === 'pending').length, color: '#FCD34D' },
-            { label: 'Missing', count: docs.filter(d => d.status === 'required').length, color: '#F87171' },
-          ].map(s => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color }} />
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{s.count} {s.label}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
+      {docs.length === 0 && (
+        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-3)' }}>
+          <div style={{ fontSize: '0.88rem', marginBottom: '4px' }}>No documents assigned yet.</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-4)' }}>Your Leverest team will set up your checklist.</div>
+        </div>
+      )}
+
       {/* Category tables */}
-      {categories.map(cat => {
-        const catDocs = docs.filter(d => d.category === cat);
-        const catReceived = catDocs.filter(d => d.status === 'received').length;
+      {categories.map((cat: any) => {
+        const catDocs = docs.filter((d: any) => d.category === cat);
+        const catReceived = catDocs.filter((d: any) => d.status === 'received').length;
         const catPct = catDocs.length ? Math.round((catReceived / catDocs.length) * 100) : 0;
         return (
           <div key={cat} className="card" style={{ marginBottom: '14px' }}>
@@ -80,14 +157,10 @@ export default function ClientDocumentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {catDocs.map(doc => (
+                  {catDocs.map((doc: any) => (
                     <tr key={doc.id}>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: doc.status === 'received' ? '#4ADE80' : doc.status === 'pending' ? '#FCD34D' : '#F87171', flexShrink: 0 }} />
-                          <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-1)' }}>{doc.name}</span>
-                          {doc.is_required && <span style={{ fontSize: '0.58rem', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '3px', padding: '1px 4px' }}>Required</span>}
-                        </div>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-1)' }}>{doc.document_name}</span>
                       </td>
                       <td>
                         <span className={`pill ${doc.status === 'received' ? 'pill-green' : doc.status === 'pending' ? 'pill-gold' : 'pill-red'}`}>
@@ -95,18 +168,30 @@ export default function ClientDocumentsPage() {
                         </span>
                       </td>
                       <td style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
-                        {doc.file_name ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {doc.file_name}
-                            {doc.file_url && <a href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}><ExternalLink size={11} /></a>}
-                          </div>
-                        ) : '—'}
+                        {doc.file_name || '—'}
                       </td>
                       <td>
                         {doc.status !== 'received' && (
                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '0.72rem', color: 'var(--gold)', border: '1px solid var(--gold-border)', borderRadius: '5px', padding: '4px 10px', background: 'var(--gold-dim)' }}>
-                            <Upload size={11} /> Upload
-                            <input type="file" style={{ display: 'none' }} />
+                            {uploading === doc.id ? (
+                              <>
+                                <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload size={11} /> Upload
+                              </>
+                            )}
+                            <input 
+                              ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                              type="file" 
+                              style={{ display: 'none' }} 
+                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                              onChange={() => handleUpload(doc.id)}
+                              disabled={uploading !== null}
+                            />
                           </label>
                         )}
                         {doc.status === 'received' && (

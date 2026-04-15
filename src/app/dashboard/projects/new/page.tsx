@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_USERS } from '@/lib/mock-data';
 import { PIPELINE_STAGES } from '@/lib/types';
 import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -46,8 +45,6 @@ function Row({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>{children}</div>;
 }
 
-const teamUsers = MOCK_USERS.filter(u => !['admin','accounts','mis'].includes(u.role));
-
 export default function NewProjectPage() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
@@ -59,6 +56,16 @@ export default function NewProjectPage() {
   }, [isAuthenticated, user, router]);
 
   const [saving, setSaving] = useState(false);
+  const [teamUsers, setTeamUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/team')
+      .then(res => res.json())
+      .then(data => {
+        if (data.members) setTeamUsers(data.members);
+      })
+      .catch(console.error);
+  }, []);
 
   const [form, setForm] = useState({
     company_name: '', company_type: '', loan_type: '', loan_amount: '',

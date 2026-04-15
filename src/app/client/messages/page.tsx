@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { MOCK_SPOCS, MOCK_MESSAGES } from '@/lib/mock-data';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
+import { getDynamicSpocs } from '@/lib/dynamic';
 
 function getInitials(n: string) { return n.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase(); }
 function getGrad(name: string) {
@@ -21,17 +21,16 @@ function timeAgo(d: string) {
 
 export default function ClientMessagesPage() {
   const { user } = useAuth();
-  const spoc = MOCK_SPOCS.find(s => s.email === user?.email);
+  const spoc = getDynamicSpocs().find(s => s.email === user?.email);
 
-  const [messages, setMessages] = useState(
-    MOCK_MESSAGES.filter(m => m.project_id === spoc?.project_id)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-  );
+  const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
 
-  function send() {
+  async function send() {
     if (!text.trim()) return;
-    setMessages(prev => [...prev, {
+    
+    const newMessage = {
       id: `msg-${Date.now()}`,
       project_id: spoc?.project_id || '',
       content: text,
@@ -40,8 +39,31 @@ export default function ClientMessagesPage() {
       sender_type: 'client',
       created_at: new Date().toISOString(),
       read_by: [],
-    }]);
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
     setText('');
+    setSending(true);
+    
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMessage),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) {
+          // Update with server response if needed
+          setMessages(prev => prev.map(m => m.id === newMessage.id ? data.message : m));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -70,7 +92,7 @@ export default function ClientMessagesPage() {
           padding: '16px 18px', minHeight: '360px', maxHeight: '480px',
           overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px',
         }}>
-          {messages.map(msg => {
+          {messages.map((msg: any) => {
             const isClient = msg.sender_type === 'client';
             return (
               <div key={msg.id} style={{ display: 'flex', gap: '10px', justifyContent: isClient ? 'flex-end' : 'flex-start' }}>
@@ -83,9 +105,6 @@ export default function ClientMessagesPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', justifyContent: isClient ? 'flex-end' : 'flex-start' }}>
                     <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-2)' }}>{msg.sender_name}</span>
                     <span style={{ fontSize: '0.62rem', color: 'var(--text-4)' }}>{timeAgo(msg.created_at)}</span>
-                    {isClient
-                      ? <span className="pill pill-orange" style={{ fontSize: '0.55rem' }}>You</span>
-                      : <span className="pill pill-gold" style={{ fontSize: '0.55rem' }}>Leverest</span>}
                   </div>
                   <div style={{
                     padding: '10px 14px', borderRadius: '10px',
@@ -129,10 +148,15 @@ export default function ClientMessagesPage() {
           <button
             className="btn btn-primary"
             onClick={send}
-            disabled={!text.trim()}
+            disabled={!text.trim() || sending}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-end' }}
           >
-            <Send size={14} /> Send
+            {sending ? (
+              <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+            ) : (
+              <Send size={14} />
+            )}
+            Send
           </button>
         </div>
       </div>

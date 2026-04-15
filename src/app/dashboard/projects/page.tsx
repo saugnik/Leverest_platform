@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
-import { formatCurrency, getProjectDocCompletionPercent } from '@/lib/mock-data'; // Keep the UI helper functions
+import { formatCurrency } from '@/lib/utils';
 import { canViewFinanceData } from '@/lib/utils';
 import { PIPELINE_STAGES } from '@/lib/types';
 import { Plus, Search, ExternalLink, Filter } from 'lucide-react';

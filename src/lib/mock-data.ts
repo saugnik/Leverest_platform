@@ -8,11 +8,10 @@ import {
   Message,
   Notification,
   ClientSPOC,
-  MANUFACTURING_SERVICE_CHECKLIST,
-  NBFC_CHECKLIST,
 } from './types';
 
-// ─── MOCK USERS ────────────────────────────────────────────────────────────────
+// ─── TEAM ROSTER ────────────────────────────────────────────────────────────────
+// Real Leverest team members — used for authentication and team assignment.
 
 export const MOCK_USERS: User[] = [
   { id: 'u-pawan', email: 'pawan.lohia@leverestfin.com', name: 'Pawan Lohia', role: 'admin', branch: 'kolkata', designation: 'Director', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
@@ -30,100 +29,18 @@ export const MOCK_USERS: User[] = [
   { id: 'u-mohitosh', email: 'mis@leverestfin.com', name: 'Mohitosh Singha', role: 'mis', branch: 'kolkata', designation: 'MIS', phone: '', is_active: true, created_at: '2024-01-01T00:00:00Z' },
 ];
 
-// ─── MOCK CLIENT SPOCs ──────────────────────────────────────────────────────────
+// ─── EMPTY DATA STORES (populated by Supabase in production) ─────────────────
 
 export const MOCK_SPOCS: ClientSPOC[] = [];
-
-// ─── MOCK PROJECTS ──────────────────────────────────────────────────────────────
-
-export const MOCK_PROJECTS: Project[] = [
-  {
-    id: "mock-seed-project",
-    name: "Leverest AI Validation Test — Working Capital",
-    client_name: "Leverest AI Validation Test",
-    company_name: "Leverest AI Validation Test",
-    company_type: "manufacturing_service",
-    branch: "kolkata",
-    stage: "client_meeting",
-    lead_source: "direct",
-    loan_type: "working_capital",
-    loan_amount: 50000000,
-    assigned_team: ["pawan.lohia@leverestfin.com", "contact@leverestfin.com"],
-    spoc_ids: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    created_by: "pawan.lohia@leverestfin.com",
-    description: "A permanent test project for AI validation."
-  }
-];
-
-// ─── MOCK DOCUMENTS ─────────────────────────────────────────────────────────────
-
-function generateDocuments(projectId: string, companyType: 'manufacturing_service' | 'nbfc'): DocumentItem[] {
-  const checklist = companyType === 'manufacturing_service' ? MANUFACTURING_SERVICE_CHECKLIST : NBFC_CHECKLIST;
-  const statuses: ('received' | 'pending' | 'required')[] = ['received', 'received', 'pending', 'required'];
-  const docs: DocumentItem[] = [];
-  let idx = 0;
-  for (const cat of checklist) {
-    for (const docName of cat.docs) {
-      const status = statuses[idx % statuses.length];
-      docs.push({
-        id: `doc-${projectId}-${idx}`,
-        project_id: projectId,
-        category: cat.category,
-        name: docName,
-        status,
-        file_url: status === 'received' ? `https://drive.google.com/file/d/example-${idx}` : undefined,
-        file_name: status === 'received' ? `${docName.replace(/[^a-z0-9]/gi, '_')}.pdf` : undefined,
-        file_source: status === 'received' ? 'drive' : undefined,
-        uploaded_at: status === 'received' ? '2025-03-01T10:00:00Z' : undefined,
-        is_required: true,
-      });
-      idx++;
-    }
-  }
-  return docs;
-}
-
-export const MOCK_DOCUMENTS: DocumentItem[] = generateDocuments("mock-seed-project", "manufacturing_service");
-
-// ─── MOCK QUERIES ───────────────────────────────────────────────────────────────
-
+export const MOCK_PROJECTS: Project[] = [];
+export const MOCK_DOCUMENTS: DocumentItem[] = [];
 export const MOCK_QUERIES: Query[] = [];
-
-// ─── MOCK ACTIVITY LOGS ─────────────────────────────────────────────────────────
-
 export const MOCK_ACTIVITY_LOGS: ActivityLog[] = [];
-
-// ─── MOCK INTERNAL NOTES ───────────────────────────────────────────────────────
-
 export const MOCK_NOTES: InternalNote[] = [];
-
-// ─── MOCK MESSAGES ─────────────────────────────────────────────────────────────
-
 export const MOCK_MESSAGES: Message[] = [];
-
-// ─── MOCK NOTIFICATIONS ────────────────────────────────────────────────────────
-
 export const MOCK_NOTIFICATIONS: Notification[] = [];
 
 // ─── HELPER FUNCTIONS ──────────────────────────────────────────────────────────
-
-export function getProjectDocuments(projectId: string): DocumentItem[] {
-  return MOCK_DOCUMENTS.filter((d) => d.project_id === projectId);
-}
-
-export function getProjectDocCompletionPercent(projectId: string): number {
-  const docs = getProjectDocuments(projectId);
-  if (!docs.length) return 0;
-  const received = docs.filter((d) => d.status === 'received').length;
-  return Math.round((received / docs.length) * 100);
-}
-
-export function getProjectsByUser(userEmail: string, userRole: string): Project[] {
-  // Return all projects so everyone can see the project list on the dashboard
-  return MOCK_PROJECTS;
-}
 
 export function formatCurrency(amount: number): string {
   if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
@@ -131,6 +48,12 @@ export function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
-export function getStageIndex(stage: string): number {
-  return PIPELINE_STAGES.findIndex(s => s.id === stage);
+export function getProjectDocCompletionPercent(_projectId: string): number {
+  // In production, document completion is computed from live Supabase data.
+  // This stub returns 0 when no documents exist in the local store.
+  return 0;
+}
+
+export function getProjectsByUser(_userEmail: string, _userRole: string): Project[] {
+  return [];
 }
